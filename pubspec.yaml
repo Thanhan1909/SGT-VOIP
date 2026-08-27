@@ -1,0 +1,33 @@
+name: flutter_sip_softphone
+description: "A WebRTC SIP Softphone Client"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # WebRTC & SIP Core (Cặp đôi tương thích chuẩn)
+  sip_ua: ^1.1.0
+  flutter_webrtc: ^1.2.0
+
+  # Storage & Permissions
+  shared_preferences: ^2.2.2
+  permission_handler: ^11.3.1
+
+  # Audio & State
+  audioplayers: ^6.1.1
+  provider: ^6.1.2
+  flutter_spinkit: ^5.2.1
+  intl: any
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
