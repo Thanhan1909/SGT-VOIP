@@ -24,8 +24,8 @@ if (flutterVersionName == null) {
 
 android {
     namespace "com.sgt.voip.softphone"
-    compileSdk 34
-    ndkVersion flutter.ndkVersion
+    compileSdk 36
+    ndkVersion "25.1.8937393"
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17

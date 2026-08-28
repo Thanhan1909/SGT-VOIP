@@ -12,7 +12,7 @@ dependencies:
 
   # WebRTC & SIP Core (Cặp đôi tương thích chuẩn)
   sip_ua: ^1.1.0
-  flutter_webrtc: ^1.2.0
+  flutter_webrtc: 1.2.0
 
   # Storage & Permissions
   shared_preferences: ^2.2.2
