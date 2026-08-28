@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:sip_ua/sip_ua.dart';
 import '../../data/models/sip_account.dart';
 import 'audio_manager.dart';
@@ -142,6 +143,15 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
       return;
     }
 
+    // 1. Request Microphone Runtime Permission before native audio initialization
+    final micStatus = await Permission.microphone.request();
+    if (!micStatus.isGranted) {
+      debugPrint('[SipManager] Error: Microphone permission denied by user');
+      _statusMessage = 'Cần cấp quyền Microphone để gọi';
+      notifyListeners();
+      return;
+    }
+
     final targetUri = 'sip:$cleanNumber@${_account!.domain}';
     debugPrint('[SipManager] Calling target: $targetUri');
 
@@ -150,6 +160,7 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
     _audioManager.setSpeakerphone(false);
 
     try {
+      // 2. Strict Voice-only constraints (Audio: true, Video: false)
       final mediaConstraints = <String, dynamic>{
         'audio': true,
         'video': false,
@@ -166,8 +177,13 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
     }
   }
 
-  void answerCall() {
+  Future<void> answerCall() async {
     if (_currentCall != null) {
+      final micStatus = await Permission.microphone.request();
+      if (!micStatus.isGranted) {
+        debugPrint('[SipManager] Error: Microphone permission denied by user');
+        return;
+      }
       _audioManager.stopAll();
       _currentCall!.answer(_helper.buildCallOptions(true));
       _startCallTimer();
