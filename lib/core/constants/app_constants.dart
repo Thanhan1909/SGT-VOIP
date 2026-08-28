@@ -11,10 +11,10 @@ class AppConstants {
   static const String defaultDisplayName = 'Nhân viên Sale 201';
 
   // ICE NAT / STUN / TURN Settings
-  static const String defaultStunUri = 'stun:sgtvoip.duckdns.org:3478';
-  static const String defaultTurnUri = 'turn:sgtvoip.duckdns.org:3478';
-  static const String defaultTurnUsername = 'webrtc_user';
-  static const String defaultTurnPassword = 'webrtc_password123';
+  static const String defaultStunUri = 'stun:stun.l.google.com:19302';
+  static const String defaultTurnUri = '';
+  static const String defaultTurnUsername = '';
+  static const String defaultTurnPassword = '';
 
   // SharedPreferences Keys
   static const String keyWssUri = 'sip_wss_uri';

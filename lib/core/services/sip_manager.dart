@@ -94,9 +94,12 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
       settings.register = true;
       settings.register_expires = 300;
 
-      // Configure STUN / TURN ICE Servers
-      final iceServers = <Map<String, String>>[];
-      if (acc.stunUri.isNotEmpty) {
+      // Configure STUN / TURN ICE Servers for NAT Traversal
+      final iceServers = <Map<String, String>>[
+        {'urls': 'stun:stun.l.google.com:19302'},
+        {'urls': 'stun:stun1.l.google.com:19302'},
+      ];
+      if (acc.stunUri.isNotEmpty && !acc.stunUri.contains('google.com')) {
         iceServers.add({'urls': acc.stunUri});
       }
       if (acc.turnUri.isNotEmpty) {
