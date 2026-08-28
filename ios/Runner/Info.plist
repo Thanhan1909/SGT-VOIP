@@ -36,11 +36,11 @@
 
 	<!-- Microphone Permission -->
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Ứng dụng cần quyền sử dụng Microphone để thực hiện cuộc gọi thoại VoIP qua tổng đài Asterisk.</string>
+	<string>Ứng dụng cần quyền sử dụng Micro để đàm thoại cuộc gọi.</string>
 
 	<!-- Camera Permission (if video is enabled in future) -->
 	<key>NSCameraUsageDescription</key>
-	<string>Ứng dụng cần quyền Camera cho cuộc gọi Video WebRTC.</string>
+	<string>Ứng dụng cần quyền Camera cho tính năng cuộc gọi.</string>
 
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
