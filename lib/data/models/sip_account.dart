@@ -40,16 +40,21 @@ class SipAccount {
 
   static Future<SipAccount> loadFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
+    final savedStun = prefs.getString(AppConstants.keyStunUri);
+    final savedTurn = prefs.getString(AppConstants.keyTurnUri);
+    final savedTurnUser = prefs.getString(AppConstants.keyTurnUsername);
+    final savedTurnPass = prefs.getString(AppConstants.keyTurnPassword);
+
     return SipAccount(
       wssUri: prefs.getString(AppConstants.keyWssUri) ?? AppConstants.defaultWssUri,
       domain: prefs.getString(AppConstants.keyDomain) ?? AppConstants.defaultDomain,
       extension: prefs.getString(AppConstants.keyExtension) ?? AppConstants.defaultExtension,
       password: prefs.getString(AppConstants.keyPassword) ?? AppConstants.defaultPassword,
       displayName: prefs.getString(AppConstants.keyDisplayName) ?? AppConstants.defaultDisplayName,
-      stunUri: prefs.getString(AppConstants.keyStunUri) ?? AppConstants.defaultStunUri,
-      turnUri: prefs.getString(AppConstants.keyTurnUri) ?? AppConstants.defaultTurnUri,
-      turnUsername: prefs.getString(AppConstants.keyTurnUsername) ?? AppConstants.defaultTurnUsername,
-      turnPassword: prefs.getString(AppConstants.keyTurnPassword) ?? AppConstants.defaultTurnPassword,
+      stunUri: (savedStun != null && savedStun.isNotEmpty) ? savedStun : AppConstants.defaultStunUri,
+      turnUri: (savedTurn != null && savedTurn.isNotEmpty) ? savedTurn : AppConstants.defaultTurnUri,
+      turnUsername: (savedTurnUser != null && savedTurnUser.isNotEmpty) ? savedTurnUser : AppConstants.defaultTurnUsername,
+      turnPassword: (savedTurnPass != null && savedTurnPass.isNotEmpty) ? savedTurnPass : AppConstants.defaultTurnPassword,
     );
   }
 
