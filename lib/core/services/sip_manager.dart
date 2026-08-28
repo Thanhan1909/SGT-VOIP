@@ -86,6 +86,7 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
       settings.uri = 'sip:${acc.extension}@${acc.domain}';
       settings.authorizationUser = acc.extension;
       settings.password = acc.password;
+      settings.realm = 'asterisk';
       settings.displayName =
           acc.displayName.isNotEmpty ? acc.displayName : acc.extension;
       settings.userAgent = 'Flutter SGT VoIP Softphone / Asterisk 20';
