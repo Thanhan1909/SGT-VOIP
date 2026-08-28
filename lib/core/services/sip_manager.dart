@@ -240,19 +240,34 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
     }
   }
 
-  /// Đá luồng / Chuyển cuộc gọi (Call Transfer via SIP REFER)
+  /// Đá luồng / Chuyển cuộc gọi (Hỗ trợ cả SIP REFER và DTMF ##)
   Future<bool> transferCall(String targetExtension) async {
     if (_currentCall == null || targetExtension.trim().isEmpty) return false;
     final target = targetExtension.trim();
-    final targetUri = target.contains('@') ? target : '$target@${_account!.domain}';
+    final targetUri =
+        target.contains('@') ? target : '$target@${_account!.domain}';
 
     debugPrint('[SipManager] Transferring call to: $targetUri');
     try {
-      _currentCall!.refer(targetUri);
+      // 1. Chuyển cuộc gọi chuẩn SIP REFER
+      _currentCall!.refer('sip:$targetUri');
       return true;
     } catch (e) {
-      debugPrint('[SipManager] Transfer call error: $e');
-      return false;
+      debugPrint('[SipManager] SIP REFER failed ($e), falling back to DTMF ##');
+      try {
+        // 2. Dự phòng bằng DTMF Feature ##
+        _currentCall!.sendDTMF('##$target');
+        return true;
+      } catch (dtmfErr) {
+        debugPrint('[SipManager] DTMF Transfer error: $dtmfErr');
+        return false;
+      }
+    }
+  }
+
+  void transferViaDTMF(String targetExtension) {
+    if (_currentCall != null) {
+      _currentCall!.sendDTMF('##${targetExtension.trim()}');
     }
   }
 

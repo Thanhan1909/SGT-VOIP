@@ -17,9 +17,9 @@ class _TransferDialogState extends State<TransferDialog> {
   final TextEditingController _extController = TextEditingController();
 
   final List<Map<String, String>> _quickExtensions = [
-    {'name': 'Máy Odoo CSKH', 'ext': '1001'},
-    {'name': 'Leader / Quản lý', 'ext': '1003'},
-    {'name': 'Kỹ thuật / Hỗ trợ', 'ext': '1004'},
+    {'name': 'Sale 201', 'ext': '201'},
+    {'name': 'Leader 202', 'ext': '202'},
+    {'name': 'Giám Đốc 203', 'ext': '203'},
   ];
 
   @override
