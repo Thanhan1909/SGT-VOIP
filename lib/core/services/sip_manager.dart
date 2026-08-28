@@ -150,9 +150,14 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
     _audioManager.setSpeakerphone(false);
 
     try {
+      final mediaConstraints = <String, dynamic>{
+        'audio': true,
+        'video': false,
+      };
       _helper.call(
         targetUri,
-        voiceOnly: true,
+        voiceonly: true,
+        customOptions: {'mediaConstraints': mediaConstraints},
       );
 
       _audioManager.playRingback();
@@ -285,14 +290,14 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
 
     switch (state.state) {
       case CallStateEnum.CALL_INITIATION:
-        if (call.direction == Direction.incoming) {
+        if (call.direction.toUpperCase() == 'INCOMING') {
           _audioManager.playRingtone();
           _navigateToIncomingCall();
         }
         break;
 
       case CallStateEnum.PROGRESS:
-        if (call.direction == Direction.outgoing) {
+        if (call.direction.toUpperCase() == 'OUTGOING') {
           _audioManager.playRingback();
           _navigateToInCall();
         }
@@ -359,11 +364,7 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
     debugPrint('[SipManager] New SIP notify received: ${ntf.request?.body}');
   }
 
-  @override
-  void onNewReinvite(ReInvite event) {
-    debugPrint('[SipManager] New SIP reinvite received');
-    event.accept?.call({});
-  }
+
 
   // ── Navigation Routing Helpers ───────────────────────────────────────────
 

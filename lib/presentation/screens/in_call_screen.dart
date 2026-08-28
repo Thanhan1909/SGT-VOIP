@@ -49,7 +49,7 @@ class InCallScreen extends StatelessWidget {
                     Text(
                       isConnected
                           ? (sip.isOnHold ? 'Đang tạm giữ máy' : 'Đang đàm thoại')
-                          : (call?.direction == Direction.incoming ? 'Đang đổ chuông...' : 'Đang kết nối...'),
+                          : (call?.direction.toUpperCase() == 'INCOMING' ? 'Đang đổ chuông...' : 'Đang kết nối...'),
                       style: TextStyle(
                         color: isConnected ? AppConstants.accentGreen : AppConstants.accentAmber,
                         fontSize: 13,
