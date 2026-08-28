@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 class AppConstants {
   // Default Asterisk Infrastructure Settings
   // WSS qua Cloudflare Tunnel (cập nhật khi tunnel đổi URL)
-  static const String defaultWssUri = 'wss://weighted-royalty-ladies-rentals.trycloudflare.com/ws';
+  static const String defaultWssUri =
+      'wss://discounts-scheduled-martha-resist.trycloudflare.com/ws';
   static const String defaultDomain = 'sgtvoip.duckdns.org';
   static const String defaultExtension = '201';
   static const String defaultPassword = 'Sale201@123';
