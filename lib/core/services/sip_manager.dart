@@ -148,63 +148,66 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
       return;
     }
 
-    // 1. Request Microphone Runtime Permission before native audio initialization (Android / iOS)
-    if (!kIsWeb) {
-      try {
-        final micStatus = await Permission.microphone.request();
-        if (!micStatus.isGranted) {
-          debugPrint('[SipManager] Error: Microphone permission denied by user');
-          _statusMessage = 'Cần cấp quyền Microphone để gọi';
-          notifyListeners();
-          return;
-        }
-      } catch (permErr) {
-        debugPrint('[SipManager] Permission check note: $permErr');
-      }
-    }
-
-    final targetUri = 'sip:$cleanNumber@${_account!.domain}';
-    debugPrint('[SipManager] Calling target: $targetUri');
-
-    _isMuted = false;
-    _isOnHold = false;
-    _audioManager.setSpeakerphone(false);
-
     try {
-      // 2. Strict Voice-only constraints (Audio: true, Video: false)
+      // 1. Request Microphone Runtime Permission on iOS/Android
+      if (!kIsWeb) {
+        var micStatus = await Permission.microphone.status;
+        if (!micStatus.isGranted) {
+          micStatus = await Permission.microphone.request();
+          if (!micStatus.isGranted) {
+            debugPrint('[SipManager] Microphone permission denied');
+            _statusMessage = 'Cần cấp quyền Microphone để gọi';
+            notifyListeners();
+            return;
+          }
+        }
+      }
+
+      final targetUri = 'sip:$cleanNumber@${_account!.domain}';
+      debugPrint('[SipManager] Calling target: $targetUri');
+
+      _isMuted = false;
+      _isOnHold = false;
+
+      // 2. Strict Voice-only constraints (Audio: true, Video: false) for iOS WebRTC
       final mediaConstraints = <String, dynamic>{
         'audio': true,
         'video': false,
       };
+
+      // 3. Make voice call safely
       _helper.call(
         targetUri,
         voiceonly: true,
         customOptions: {'mediaConstraints': mediaConstraints},
       );
-
-      _audioManager.playRingback();
-    } catch (e) {
-      debugPrint('[SipManager] Make call error: $e');
+    } catch (e, stack) {
+      debugPrint('[SipManager] Error during makeCall: $e');
+      debugPrint('[SipManager] Stack trace: $stack');
     }
   }
 
   Future<void> answerCall() async {
     if (_currentCall != null) {
-      if (!kIsWeb) {
-        try {
-          final micStatus = await Permission.microphone.request();
+      try {
+        if (!kIsWeb) {
+          var micStatus = await Permission.microphone.status;
           if (!micStatus.isGranted) {
-            debugPrint('[SipManager] Error: Microphone permission denied by user');
-            return;
+            micStatus = await Permission.microphone.request();
+            if (!micStatus.isGranted) {
+              debugPrint('[SipManager] Microphone permission denied');
+              return;
+            }
           }
-        } catch (permErr) {
-          debugPrint('[SipManager] Permission check note: $permErr');
         }
+        _audioManager.stopAll();
+        _currentCall!.answer(_helper.buildCallOptions(true));
+        _startCallTimer();
+        notifyListeners();
+      } catch (e, stack) {
+        debugPrint('[SipManager] Error during answerCall: $e');
+        debugPrint('[SipManager] Stack trace: $stack');
       }
-      _audioManager.stopAll();
-      _currentCall!.answer(_helper.buildCallOptions(true));
-      _startCallTimer();
-      notifyListeners();
     }
   }
 
