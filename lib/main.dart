@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -38,13 +39,12 @@ void main() async {
 }
 
 Future<void> _requestPermissions() async {
-  try {
-    await [
-      Permission.microphone,
-      Permission.notification,
-    ].request();
-  } catch (e) {
-    debugPrint('[Main] Request permissions error: $e');
+  if (!kIsWeb) {
+    try {
+      await Permission.microphone.request();
+    } catch (e) {
+      debugPrint('[Main] Request permissions error: $e');
+    }
   }
 }
 

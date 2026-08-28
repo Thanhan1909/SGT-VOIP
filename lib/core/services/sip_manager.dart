@@ -413,15 +413,34 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
 
   // ── Navigation Routing Helpers ───────────────────────────────────────────
 
+  bool _isInCallScreenOpen = false;
+
   void _navigateToIncomingCall() {
-    navigatorKey?.currentState?.pushNamed('/incoming');
+    if (!_isInCallScreenOpen) {
+      _isInCallScreenOpen = true;
+      navigatorKey?.currentState?.pushNamed('/incoming').then((_) {
+        _isInCallScreenOpen = false;
+      });
+    }
   }
 
   void _navigateToInCall() {
-    navigatorKey?.currentState?.pushNamed('/in_call');
+    if (!_isInCallScreenOpen) {
+      _isInCallScreenOpen = true;
+      navigatorKey?.currentState?.pushNamed('/in_call').then((_) {
+        _isInCallScreenOpen = false;
+      });
+    }
   }
 
   void _navigateBackToDialpad() {
-    navigatorKey?.currentState?.popUntil(ModalRoute.withName('/'));
+    if (_isInCallScreenOpen) {
+      _isInCallScreenOpen = false;
+      try {
+        navigatorKey?.currentState?.popUntil(ModalRoute.withName('/'));
+      } catch (e) {
+        debugPrint('[SipManager] Navigate back error: $e');
+      }
+    }
   }
 }
