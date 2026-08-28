@@ -166,16 +166,25 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
       final targetUri = 'sip:$cleanNumber@${_account!.domain}';
       debugPrint('[SipManager] Calling target: $targetUri');
 
-      _isMuted = false;
-      _isOnHold = false;
-
-      // 2. Strict Voice-only constraints (Audio: true, Video: false) for iOS WebRTC
+      // 2. Strict Voice-only constraints with Google WebRTC DSP filters
       final mediaConstraints = <String, dynamic>{
-        'audio': true,
+        'audio': {
+          'mandatory': {
+            'googEchoCancellation': true,
+            'googAutoGainControl': true,
+            'googNoiseSuppression': true,
+            'googHighpassFilter': true,
+          },
+          'optional': <dynamic>[],
+        },
         'video': false,
       };
 
-      // 3. Make voice call safely
+      // 3. Optimistic UI: Chuyển màn hình đàm thoại tức thì (0ms Delay)
+      _navigateToInCall();
+      notifyListeners();
+
+      // 4. Gửi gói tin SIP INVITE WebRTC
       _helper.call(
         targetUri,
         voiceonly: true,

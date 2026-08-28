@@ -63,6 +63,7 @@ class _DialpadScreenState extends State<DialpadScreen> {
   void _makeCall(SipManager sip) {
     final number = _numberController.text.trim();
     if (number.isNotEmpty) {
+      HapticFeedback.heavyImpact();
       sip.makeCall(number);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
