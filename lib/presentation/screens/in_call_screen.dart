@@ -15,7 +15,11 @@ class InCallScreen extends StatelessWidget {
     final call = sip.currentCall;
 
     final remoteIdentity = call?.remote_identity ?? 'Chưa xác định';
-    final isConnected = call?.state == CallStateEnum.CONFIRMED || call?.state == CallStateEnum.ACCEPTED;
+    final isConnected = call?.state == CallStateEnum.CONFIRMED ||
+        call?.state == CallStateEnum.ACCEPTED ||
+        sip.callState?.state == CallStateEnum.CONFIRMED ||
+        sip.callState?.state == CallStateEnum.ACCEPTED ||
+        sip.callDurationSeconds > 0;
 
     return WillPopScope(
       onWillPop: () async => false, // Prevent accidental back press during active call
