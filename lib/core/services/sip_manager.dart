@@ -76,31 +76,39 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
     try {
       final settings = UaSettings();
 
-      // Configure SIP Credentials
+      // Explicitly set transportType to WS (Fixes Null check operator crash in sip_ua)
+      settings.transportType = TransportType.WS;
       settings.webSocketUrl = acc.wssUri;
       settings.webSocketSettings.allowBadCertificate = true;
+      settings.webSocketSettings.transport_scheme =
+          acc.wssUri.startsWith('wss') ? 'wss' : 'ws';
       settings.uri = 'sip:${acc.extension}@${acc.domain}';
       settings.authorizationUser = acc.extension;
       settings.password = acc.password;
-      settings.displayName = acc.displayName.isNotEmpty ? acc.displayName : acc.extension;
+      settings.displayName =
+          acc.displayName.isNotEmpty ? acc.displayName : acc.extension;
       settings.userAgent = 'Flutter SGT VoIP Softphone / Asterisk 20';
       settings.register = true;
       settings.register_expires = 300;
 
       // Configure STUN / TURN ICE Servers
-      final iceServers = <Map<String, dynamic>>[];
+      final iceServers = <Map<String, String>>[];
       if (acc.stunUri.isNotEmpty) {
         iceServers.add({'urls': acc.stunUri});
       }
       if (acc.turnUri.isNotEmpty) {
-        final turnMap = <String, dynamic>{'urls': acc.turnUri};
+        final turnMap = <String, String>{'urls': acc.turnUri};
         if (acc.turnUsername.isNotEmpty) turnMap['username'] = acc.turnUsername;
         if (acc.turnPassword.isNotEmpty) turnMap['credential'] = acc.turnPassword;
         iceServers.add(turnMap);
       }
 
-      settings.iceServers = iceServers.map((e) => e.map((k, v) => MapEntry(k, v.toString()))).toList();
+      settings.iceServers = iceServers;
       settings.dtmfMode = DtmfMode.RFC2833;
+
+      if (_helper.connected || _helper.registered) {
+        _helper.stop();
+      }
 
       _helper.start(settings);
     } catch (e) {
