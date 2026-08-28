@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 
 class AppConstants {
   // Default Asterisk Infrastructure Settings
-  static const String defaultWssUri = 'wss://sgtvoip.duckdns.org/ws';
+  // WSS qua Cloudflare Tunnel (cập nhật khi tunnel đổi URL)
+  static const String defaultWssUri = 'wss://weighted-royalty-ladies-rentals.trycloudflare.com/ws';
   static const String defaultDomain = 'sgtvoip.duckdns.org';
-  static const String defaultExtension = '1002';
-  static const String defaultPassword = 'Password1234@';
-  static const String defaultDisplayName = 'Nhân viên 1002';
+  static const String defaultExtension = '201';
+  static const String defaultPassword = 'Sale201@123';
+  static const String defaultDisplayName = 'Nhân viên Sale 201';
 
   // ICE NAT / STUN / TURN Settings
   static const String defaultStunUri = 'stun:sgtvoip.duckdns.org:3478';
