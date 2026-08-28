@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:sip_ua/sip_ua.dart';
@@ -144,13 +145,19 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
       return;
     }
 
-    // 1. Request Microphone Runtime Permission before native audio initialization
-    final micStatus = await Permission.microphone.request();
-    if (!micStatus.isGranted) {
-      debugPrint('[SipManager] Error: Microphone permission denied by user');
-      _statusMessage = 'Cần cấp quyền Microphone để gọi';
-      notifyListeners();
-      return;
+    // 1. Request Microphone Runtime Permission before native audio initialization (Android / iOS)
+    if (!kIsWeb) {
+      try {
+        final micStatus = await Permission.microphone.request();
+        if (!micStatus.isGranted) {
+          debugPrint('[SipManager] Error: Microphone permission denied by user');
+          _statusMessage = 'Cần cấp quyền Microphone để gọi';
+          notifyListeners();
+          return;
+        }
+      } catch (permErr) {
+        debugPrint('[SipManager] Permission check note: $permErr');
+      }
     }
 
     final targetUri = 'sip:$cleanNumber@${_account!.domain}';
@@ -180,10 +187,16 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
 
   Future<void> answerCall() async {
     if (_currentCall != null) {
-      final micStatus = await Permission.microphone.request();
-      if (!micStatus.isGranted) {
-        debugPrint('[SipManager] Error: Microphone permission denied by user');
-        return;
+      if (!kIsWeb) {
+        try {
+          final micStatus = await Permission.microphone.request();
+          if (!micStatus.isGranted) {
+            debugPrint('[SipManager] Error: Microphone permission denied by user');
+            return;
+          }
+        } catch (permErr) {
+          debugPrint('[SipManager] Permission check note: $permErr');
+        }
       }
       _audioManager.stopAll();
       _currentCall!.answer(_helper.buildCallOptions(true));
