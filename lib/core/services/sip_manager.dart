@@ -28,7 +28,9 @@ enum SipConnectionStatus {
   error,
 }
 
-class SipManager extends ChangeNotifier implements SipUaHelperListener {
+class SipManager extends ChangeNotifier
+    with WidgetsBindingObserver
+    implements SipUaHelperListener {
   static final SipManager _instance = SipManager._internal();
   factory SipManager() => _instance;
   SipManager._internal();
@@ -46,6 +48,10 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
   bool _isOnHold = false;
   int _callDurationSeconds = 0;
   Timer? _callTimer;
+  Timer? _reconnectTimer;
+  Timer? _keepAliveTimer;
+  int _reconnectAttempts = 0;
+  static const int _maxReconnectAttempts = 5;
 
   // Global navigator key for navigating to incoming / in-call screens
   GlobalKey<NavigatorState>? navigatorKey;
@@ -70,15 +76,32 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
 
   Future<void> initialize({GlobalKey<NavigatorState>? navKey}) async {
     navigatorKey = navKey;
+    WidgetsBinding.instance.addObserver(this);
     _helper.addSipUaHelperListener(this);
     await _audioManager.init();
     _account = await SipAccount.loadFromPrefs();
     await register();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _log('SipManager', 'didChangeAppLifecycleState: $state');
+    if (state == AppLifecycleState.resumed) {
+      if (_currentCall == null &&
+          (!_helper.connected ||
+              !_helper.registered ||
+              _connectionStatus != SipConnectionStatus.online)) {
+        _log('SipManager', 'App resumed & SIP offline -> Triggering immediate register()');
+        _reconnectAttempts = 0;
+        register();
+      }
+    }
+  }
+
   Future<void> register({SipAccount? newAccount}) async {
     if (newAccount != null) {
       _account = newAccount;
+      _reconnectAttempts = 0;
       await _account!.saveToPrefs();
     }
 
@@ -106,22 +129,16 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
           acc.displayName.isNotEmpty ? acc.displayName : acc.extension;
       settings.userAgent = 'Flutter SGT VoIP Softphone / Asterisk 20';
       settings.register = true;
-      settings.register_expires = 300;
+      settings.register_expires = 120; // Matches Asterisk default_expiration (120s)
       settings.iceGatheringTimeout = 500;
 
-      // Configure STUN / TURN ICE Servers for NAT Traversal
+      // Configure STUN ICE Servers for NAT Traversal (TURN omitted: port 3478 is unreachable from WAN)
       final iceServers = <Map<String, String>>[
         {'urls': 'stun:stun.l.google.com:19302'},
         {'urls': 'stun:stun1.l.google.com:19302'},
       ];
       if (acc.stunUri.isNotEmpty && !acc.stunUri.contains('google.com')) {
         iceServers.add({'urls': acc.stunUri});
-      }
-      if (acc.turnUri.isNotEmpty) {
-        final turnMap = <String, String>{'urls': acc.turnUri};
-        if (acc.turnUsername.isNotEmpty) turnMap['username'] = acc.turnUsername;
-        if (acc.turnPassword.isNotEmpty) turnMap['credential'] = acc.turnPassword;
-        iceServers.add(turnMap);
       }
 
       settings.iceServers = iceServers;
@@ -137,10 +154,14 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
       _connectionStatus = SipConnectionStatus.error;
       _statusMessage = 'Lỗi kết nối: $e';
       notifyListeners();
+      _scheduleReconnect();
     }
   }
 
   Future<void> unregister() async {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _stopKeepAlive();
     try {
       _helper.unregister(true);
       _helper.stop();
@@ -339,24 +360,68 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
     _log('TIMING', 'registrationStateChanged: ${state.state} (cause=${state.cause?.toString()})');
     switch (state.state) {
       case RegistrationStateEnum.REGISTERED:
+        _reconnectAttempts = 0;
         _connectionStatus = SipConnectionStatus.online;
         _statusMessage = 'Đã đăng ký (${_account?.extension})';
+        _reconnectTimer?.cancel();
+        _reconnectTimer = null;
+        _startKeepAlive();
         break;
       case RegistrationStateEnum.UNREGISTERED:
         _connectionStatus = SipConnectionStatus.offline;
         _statusMessage = 'Chưa đăng ký';
+        _stopKeepAlive();
         break;
       case RegistrationStateEnum.REGISTRATION_FAILED:
         _connectionStatus = SipConnectionStatus.error;
         _statusMessage = 'Đăng ký thất bại (${state.cause?.toString() ?? 'Lỗi'})';
+        _stopKeepAlive();
+        _scheduleReconnect();
         break;
       case RegistrationStateEnum.NONE:
       default:
         _connectionStatus = SipConnectionStatus.offline;
         _statusMessage = 'Ngoại tuyến';
+        _stopKeepAlive();
         break;
     }
     notifyListeners();
+  }
+
+  void _scheduleReconnect() {
+    if (_currentCall != null) return;
+    _reconnectTimer?.cancel();
+    if (_reconnectAttempts >= _maxReconnectAttempts) {
+      _log('SipManager', 'Max auto-reconnect attempts reached ($_maxReconnectAttempts). Halting loop.');
+      _connectionStatus = SipConnectionStatus.error;
+      _statusMessage = 'Mất kết nối. Chạm biểu tượng để thử lại.';
+      notifyListeners();
+      return;
+    }
+
+    _reconnectTimer = Timer(const Duration(seconds: 2), () {
+      if (_connectionStatus != SipConnectionStatus.online && _currentCall == null) {
+        _reconnectAttempts++;
+        _log('SipManager', 'Auto-reconnecting (attempt $_reconnectAttempts/$_maxReconnectAttempts)...');
+        register();
+      }
+    });
+  }
+
+  void _startKeepAlive() {
+    _stopKeepAlive();
+    // Send periodic registration keepalive every 20s to prevent Cloudflare and Asterisk idle timeout
+    _keepAliveTimer = Timer.periodic(const Duration(seconds: 20), (timer) {
+      if (_helper.connected && _connectionStatus == SipConnectionStatus.online && _currentCall == null) {
+        _log('SipManager', 'Sending SIP registration heartbeat ping (20s)...');
+        _helper.register();
+      }
+    });
+  }
+
+  void _stopKeepAlive() {
+    _keepAliveTimer?.cancel();
+    _keepAliveTimer = null;
   }
 
   void _hookIceListeners(Call call) {
@@ -457,11 +522,16 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
   void transportStateChanged(TransportState state) {
     _log('TIMING', 'transportStateChanged: ${state.state}');
     if (state.state == TransportStateEnum.CONNECTED) {
+      _reconnectAttempts = 0;
+      _reconnectTimer?.cancel();
+      _reconnectTimer = null;
       _connectionStatus = SipConnectionStatus.registering;
       _statusMessage = 'Đang đăng ký SIP...';
     } else if (state.state == TransportStateEnum.DISCONNECTED) {
       _connectionStatus = SipConnectionStatus.offline;
-      _statusMessage = 'Mất kết nối WSS';
+      _statusMessage = 'Mất kết nối WSS (Đang thử kết nối lại...)';
+      _stopKeepAlive();
+      _scheduleReconnect();
     }
     notifyListeners();
   }
