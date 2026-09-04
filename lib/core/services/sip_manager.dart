@@ -222,7 +222,9 @@ class SipManager extends ChangeNotifier
         'video': false,
       };
 
-      // 3. Optimistic UI: Chuyển màn hình đàm thoại tức thì (0ms Delay)
+      // 3. Reset timer and optimistic UI: Chuyển màn hình đàm thoại tức thì (0ms Delay)
+      _stopCallTimer();
+      _callDurationSeconds = 0;
       _navigateToInCall();
       notifyListeners();
 
@@ -266,6 +268,7 @@ class SipManager extends ChangeNotifier
   void hangupCall() {
     _audioManager.stopAll();
     _stopCallTimer();
+    _callDurationSeconds = 0;
     if (_currentCall != null) {
       try {
         _currentCall!.hangup();
@@ -345,6 +348,9 @@ class SipManager extends ChangeNotifier
   // ── Call Timer Helpers ───────────────────────────────────────────────────
 
   void _startCallTimer() {
+    if (_callTimer != null && _callTimer!.isActive) {
+      return;
+    }
     _stopCallTimer();
     _callDurationSeconds = 0;
     _callTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -356,6 +362,7 @@ class SipManager extends ChangeNotifier
   void _stopCallTimer() {
     _callTimer?.cancel();
     _callTimer = null;
+    _callDurationSeconds = 0;
   }
 
   // ── SipUaHelperListener Callbacks ────────────────────────────────────────
@@ -420,6 +427,8 @@ class SipManager extends ChangeNotifier
 
     switch (state.state) {
       case CallStateEnum.CALL_INITIATION:
+        _stopCallTimer();
+        _callDurationSeconds = 0;
         if (call.direction.toUpperCase() == 'INCOMING') {
           _log('TIMING', '>>> INCOMING INVITE received! Starting ringtone and navigating to incoming call screen.');
           _audioManager.playRingtone();
@@ -474,6 +483,7 @@ class SipManager extends ChangeNotifier
         _log('TIMING', '>>> Call ${state.state} (origin=${call.direction}, cause=${state.cause})');
         _audioManager.stopAll();
         _stopCallTimer();
+        _callDurationSeconds = 0;
         _currentCall = null;
         _callState = null;
         _navigateBackToDialpad();

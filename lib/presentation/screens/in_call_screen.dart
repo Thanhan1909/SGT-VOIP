@@ -68,8 +68,7 @@ class _InCallScreenState extends State<InCallScreen> {
     final isConnected = call?.state == CallStateEnum.CONFIRMED ||
         call?.state == CallStateEnum.ACCEPTED ||
         state == CallStateEnum.CONFIRMED ||
-        state == CallStateEnum.ACCEPTED ||
-        sip.callDurationSeconds > 0;
+        state == CallStateEnum.ACCEPTED;
 
     return WillPopScope(
       onWillPop: () async {
@@ -181,16 +180,15 @@ class _InCallScreenState extends State<InCallScreen> {
                               const SizedBox(height: 12),
 
                               // Realtime Duration Timer
-                              if (isConnected)
-                                Text(
-                                  sip.formattedDuration,
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 24,
-                                    fontFamily: 'monospace',
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                              Text(
+                                sip.formattedDuration,
+                                style: TextStyle(
+                                  color: isConnected ? Colors.white70 : Colors.white38,
+                                  fontSize: 24,
+                                  fontFamily: 'monospace',
+                                  fontWeight: FontWeight.w600,
                                 ),
+                              ),
 
                               const Spacer(flex: 2),
 
