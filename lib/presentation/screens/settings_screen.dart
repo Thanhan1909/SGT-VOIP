@@ -26,6 +26,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   bool _obscurePassword = true;
   bool _obscureTurnPass = true;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -59,29 +60,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _saveAndRegister(SipManager sip) async {
+    if (_isSaving) return;
     if (_formKey.currentState!.validate()) {
-      final updatedAccount = SipAccount(
-        extension: _extController.text.trim(),
-        password: _passController.text.trim(),
-        displayName: _nameController.text.trim(),
-        domain: _domainController.text.trim(),
-        wssUri: _wssController.text.trim(),
-        stunUri: _stunController.text.trim(),
-        turnUri: _turnController.text.trim(),
-        turnUsername: _turnUserController.text.trim(),
-        turnPassword: _turnPassController.text.trim(),
-      );
-
-      await sip.register(newAccount: updatedAccount);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Đã lưu cấu hình và gửi yêu cầu đăng ký SIP!'),
-            backgroundColor: AppConstants.accentGreen,
-          ),
+      setState(() => _isSaving = true);
+      try {
+        final updatedAccount = SipAccount(
+          extension: _extController.text.trim(),
+          password: _passController.text.trim(),
+          displayName: _nameController.text.trim(),
+          domain: _domainController.text.trim(),
+          wssUri: _wssController.text.trim(),
+          stunUri: _stunController.text.trim(),
+          turnUri: _turnController.text.trim(),
+          turnUsername: _turnUserController.text.trim(),
+          turnPassword: _turnPassController.text.trim(),
         );
-        Navigator.pop(context);
+
+        await sip.register(newAccount: updatedAccount);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Đã lưu cấu hình và gửi yêu cầu đăng ký SIP!'),
+              backgroundColor: AppConstants.accentGreen,
+            ),
+          );
+          Navigator.pop(context);
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isSaving = false);
+        }
       }
     }
   }
@@ -220,12 +229,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     backgroundColor: AppConstants.accentBlue,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
-                  icon: const Icon(Icons.check_circle, color: Colors.white),
-                  label: const Text(
-                    'Lưu & Đăng Ký Lại SIP',
-                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                  icon: _isSaving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.check_circle, color: Colors.white),
+                  label: Text(
+                    _isSaving ? 'Đang lưu & đăng ký...' : 'Lưu & Đăng Ký Lại SIP',
+                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                   ),
-                  onPressed: () => _saveAndRegister(sip),
+                  onPressed: _isSaving ? null : () => _saveAndRegister(sip),
                 ),
               ),
 
