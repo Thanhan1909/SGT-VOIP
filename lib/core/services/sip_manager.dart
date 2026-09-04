@@ -1,10 +1,24 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:sip_ua/sip_ua.dart';
 import '../../data/models/sip_account.dart';
 import 'audio_manager.dart';
+
+void _log(String tag, String msg) {
+  final now = DateTime.now();
+  final ts =
+      '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}.${now.millisecond.toString().padLeft(3, '0')}';
+  debugPrint('[$ts][$tag] $msg');
+}
+
+enum CallScreenState {
+  none,
+  incoming,
+  inCall,
+}
 
 enum SipConnectionStatus {
   offline,
@@ -93,6 +107,7 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
       settings.userAgent = 'Flutter SGT VoIP Softphone / Asterisk 20';
       settings.register = true;
       settings.register_expires = 300;
+      settings.iceGatheringTimeout = 500;
 
       // Configure STUN / TURN ICE Servers for NAT Traversal
       final iceServers = <Map<String, String>>[
@@ -144,18 +159,19 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
     if (cleanNumber.isEmpty) return;
 
     if (_connectionStatus != SipConnectionStatus.online) {
-      debugPrint('[SipManager] Cannot call: SIP is not online');
+      _log('SipManager', 'Cannot call: SIP is not online');
       return;
     }
 
     try {
+      _log('TIMING', '>>> makeCall initiated for $cleanNumber');
       // 1. Request Microphone Runtime Permission on iOS/Android
       if (!kIsWeb) {
         var micStatus = await Permission.microphone.status;
         if (!micStatus.isGranted) {
           micStatus = await Permission.microphone.request();
           if (!micStatus.isGranted) {
-            debugPrint('[SipManager] Microphone permission denied');
+            _log('SipManager', 'Microphone permission denied');
             _statusMessage = 'Cần cấp quyền Microphone để gọi';
             notifyListeners();
             return;
@@ -164,7 +180,7 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
       }
 
       final targetUri = 'sip:$cleanNumber@${_account!.domain}';
-      debugPrint('[SipManager] Calling target: $targetUri');
+      _log('SipManager', 'Calling target: $targetUri');
 
       // 2. Strict Voice-only constraints with Google WebRTC DSP filters
       final mediaConstraints = <String, dynamic>{
@@ -184,6 +200,7 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
       _navigateToInCall();
       notifyListeners();
 
+      _log('TIMING', 'Sending _helper.call($targetUri)...');
       // 4. Gửi gói tin SIP INVITE WebRTC
       _helper.call(
         targetUri,
@@ -191,31 +208,31 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
         customOptions: {'mediaConstraints': mediaConstraints},
       );
     } catch (e, stack) {
-      debugPrint('[SipManager] Error during makeCall: $e');
-      debugPrint('[SipManager] Stack trace: $stack');
+      _log('SipManager', 'Error during makeCall: $e\n$stack');
     }
   }
 
   Future<void> answerCall() async {
     if (_currentCall != null) {
       try {
+        _log('TIMING', '>>> answerCall clicked by user');
         if (!kIsWeb) {
           var micStatus = await Permission.microphone.status;
           if (!micStatus.isGranted) {
             micStatus = await Permission.microphone.request();
             if (!micStatus.isGranted) {
-              debugPrint('[SipManager] Microphone permission denied');
+              _log('SipManager', 'Microphone permission denied');
               return;
             }
           }
         }
         _audioManager.stopAll();
+        _log('TIMING', 'Sending _currentCall!.answer()...');
         _currentCall!.answer(_helper.buildCallOptions(true));
         _startCallTimer();
         notifyListeners();
       } catch (e, stack) {
-        debugPrint('[SipManager] Error during answerCall: $e');
-        debugPrint('[SipManager] Stack trace: $stack');
+        _log('SipManager', 'Error during answerCall: $e\n$stack');
       }
     }
   }
@@ -319,7 +336,7 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
 
   @override
   void registrationStateChanged(RegistrationState state) {
-    debugPrint('[SipManager] Registration state: ${state.state}');
+    _log('TIMING', 'registrationStateChanged: ${state.state} (cause=${state.cause?.toString()})');
     switch (state.state) {
       case RegistrationStateEnum.REGISTERED:
         _connectionStatus = SipConnectionStatus.online;
@@ -342,21 +359,48 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
     notifyListeners();
   }
 
+  void _hookIceListeners(Call call) {
+    try {
+      final pc = call.peerConnection;
+      if (pc != null) {
+        pc.onIceGatheringState = (RTCIceGatheringState iceState) {
+          _log('TIMING_ICE', 'ICE Gathering State changed: $iceState');
+        };
+        pc.onIceConnectionState = (RTCIceConnectionState connState) {
+          _log('TIMING_ICE', 'ICE Connection State changed: $connState');
+        };
+        pc.onIceCandidate = (RTCIceCandidate candidate) {
+          _log('TIMING_ICE', 'ICE Candidate found: sdpMid=${candidate.sdpMid}, candidate=${candidate.candidate?.trim()}');
+        };
+      }
+    } catch (e) {
+      _log('TIMING_ICE', 'Hook ICE error: $e');
+    }
+  }
+
   @override
   void callStateChanged(Call call, CallState state) {
-    debugPrint('[SipManager] Call state: ${state.state}, origin: ${call.direction}');
+    _log('TIMING', 'callStateChanged: state=${state.state}, origin=${call.direction}, id=${call.id}');
     _currentCall = call;
     _callState = state;
+
+    _hookIceListeners(call);
 
     switch (state.state) {
       case CallStateEnum.CALL_INITIATION:
         if (call.direction.toUpperCase() == 'INCOMING') {
+          _log('TIMING', '>>> INCOMING INVITE received! Starting ringtone and navigating to incoming call screen.');
           _audioManager.playRingtone();
           _navigateToIncomingCall();
         }
         break;
 
+      case CallStateEnum.CONNECTING:
+        _log('TIMING', 'Call is CONNECTING (ICE/signaling negotiation)');
+        break;
+
       case CallStateEnum.PROGRESS:
+        _log('TIMING', 'Call is PROGRESS (180/183 Ringing), origin=${call.direction}');
         if (call.direction.toUpperCase() == 'OUTGOING') {
           _audioManager.playRingback();
           _navigateToInCall();
@@ -364,7 +408,14 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
         break;
 
       case CallStateEnum.ACCEPTED:
+        _log('TIMING', '>>> Call ACCEPTED (200 OK received/sent)');
+        _audioManager.stopAll();
+        _startCallTimer();
+        _navigateToInCall();
+        break;
+
       case CallStateEnum.CONFIRMED:
+        _log('TIMING', '>>> Call CONFIRMED (ACK received/dialog established)');
         _audioManager.stopAll();
         _startCallTimer();
         _navigateToInCall();
@@ -388,6 +439,7 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
 
       case CallStateEnum.ENDED:
       case CallStateEnum.FAILED:
+        _log('TIMING', '>>> Call ${state.state} (origin=${call.direction}, cause=${state.cause})');
         _audioManager.stopAll();
         _stopCallTimer();
         _currentCall = null;
@@ -403,7 +455,7 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
 
   @override
   void transportStateChanged(TransportState state) {
-    debugPrint('[SipManager] Transport state: ${state.state}');
+    _log('TIMING', 'transportStateChanged: ${state.state}');
     if (state.state == TransportStateEnum.CONNECTED) {
       _connectionStatus = SipConnectionStatus.registering;
       _statusMessage = 'Đang đăng ký SIP...';
@@ -416,45 +468,63 @@ class SipManager extends ChangeNotifier implements SipUaHelperListener {
 
   @override
   void onNewMessage(SIPMessageRequest msg) {
-    debugPrint('[SipManager] New SIP message received: ${msg.request.body}');
+    _log('SipManager', 'New SIP message received: ${msg.request.body}');
   }
 
   @override
   void onNewNotify(Notify ntf) {
-    debugPrint('[SipManager] New SIP notify received: ${ntf.request?.body}');
+    _log('SipManager', 'New SIP notify received: ${ntf.request?.body}');
   }
 
 
 
   // ── Navigation Routing Helpers ───────────────────────────────────────────
 
-  bool _isInCallScreenOpen = false;
+  CallScreenState _callScreenState = CallScreenState.none;
+  CallScreenState get callScreenState => _callScreenState;
 
   void _navigateToIncomingCall() {
-    if (!_isInCallScreenOpen) {
-      _isInCallScreenOpen = true;
+    _log('SipManager', 'Attempting navigation to incoming call screen. Current state: $_callScreenState');
+    if (_callScreenState == CallScreenState.none) {
+      _callScreenState = CallScreenState.incoming;
       navigatorKey?.currentState?.pushNamed('/incoming').then((_) {
-        _isInCallScreenOpen = false;
+        _log('SipManager', 'Incoming call screen popped/closed');
+        _callScreenState = CallScreenState.none;
       });
+    } else {
+      _log('SipManager', 'Skip navigating to incoming screen: already in state $_callScreenState');
     }
   }
 
   void _navigateToInCall() {
-    if (!_isInCallScreenOpen) {
-      _isInCallScreenOpen = true;
-      navigatorKey?.currentState?.pushNamed('/in_call').then((_) {
-        _isInCallScreenOpen = false;
+    _log('SipManager', 'Attempting navigation to in-call screen. Current state: $_callScreenState');
+    if (_callScreenState == CallScreenState.incoming) {
+      _log('SipManager', 'Replacing incoming call screen with in-call screen');
+      _callScreenState = CallScreenState.inCall;
+      navigatorKey?.currentState?.pushReplacementNamed('/in_call').then((_) {
+        _log('SipManager', 'In-call screen popped/closed');
+        _callScreenState = CallScreenState.none;
       });
+    } else if (_callScreenState == CallScreenState.none) {
+      _log('SipManager', 'Pushing in-call screen (direct/outgoing)');
+      _callScreenState = CallScreenState.inCall;
+      navigatorKey?.currentState?.pushNamed('/in_call').then((_) {
+        _log('SipManager', 'In-call screen popped/closed');
+        _callScreenState = CallScreenState.none;
+      });
+    } else {
+      _log('SipManager', 'Skip navigating to in-call screen: already in state $_callScreenState');
     }
   }
 
   void _navigateBackToDialpad() {
-    if (_isInCallScreenOpen) {
-      _isInCallScreenOpen = false;
+    _log('SipManager', 'Navigating back to dialpad from state: $_callScreenState');
+    if (_callScreenState != CallScreenState.none) {
+      _callScreenState = CallScreenState.none;
       try {
-        navigatorKey?.currentState?.popUntil(ModalRoute.withName('/'));
+        navigatorKey?.currentState?.popUntil((route) => route.isFirst);
       } catch (e) {
-        debugPrint('[SipManager] Navigate back error: $e');
+        _log('SipManager', 'Navigate back error: $e');
       }
     }
   }

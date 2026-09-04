@@ -109,141 +109,178 @@ class _DialpadScreenState extends State<DialpadScreen> {
         ],
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            const Spacer(flex: 1),
-
-            // Number Input Display Area
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: AppConstants.surfaceDark,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: Colors.white12),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight,
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _numberController,
-                        readOnly: true,
-                        showCursor: true,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 2,
-                        ),
-                        decoration: const InputDecoration(
-                          hintText: 'Nhập số máy...',
-                          hintStyle: TextStyle(color: Colors.white24, fontSize: 22, letterSpacing: 0),
-                          border: InputBorder.none,
-                        ),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 440),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(height: 8),
+
+                          // Number Input Display Area
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: AppConstants.surfaceDark,
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(color: Colors.white12),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: _numberController,
+                                    readOnly: true,
+                                    showCursor: true,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 2,
+                                    ),
+                                    decoration: const InputDecoration(
+                                      hintText: 'Nhập số máy...',
+                                      hintStyle: TextStyle(
+                                        color: Colors.white24,
+                                        fontSize: 20,
+                                        letterSpacing: 0,
+                                      ),
+                                      border: InputBorder.none,
+                                    ),
+                                  ),
+                                ),
+                                if (_numberController.text.isNotEmpty)
+                                  GestureDetector(
+                                    onTap: _onBackspace,
+                                    onLongPress: _onClear,
+                                    child: const Padding(
+                                      padding: EdgeInsets.all(8.0),
+                                      child: Icon(
+                                        Icons.backspace_outlined,
+                                        color: AppConstants.textMuted,
+                                        size: 24,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 12),
+
+                          // Quick Extension Tag Shortcuts
+                          Wrap(
+                            alignment: WrapAlignment.center,
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: [
+                              _buildQuickTag('Odoo CSKH (1001)', '1001'),
+                              _buildQuickTag('Mobile 1 (1002)', '1002'),
+                              _buildQuickTag('Leader (1003)', '1003'),
+                            ],
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          // 3x4 Keypad Grid (Standard Rows without viewport overhead)
+                          _buildKeypadGrid(),
+
+                          const SizedBox(height: 20),
+
+                          // Call Action Button
+                          Center(
+                            child: GestureDetector(
+                              onTap: () => _makeCall(sip),
+                              child: Container(
+                                width: 68,
+                                height: 68,
+                                decoration: BoxDecoration(
+                                  color: sip.connectionStatus == SipConnectionStatus.online
+                                      ? AppConstants.accentGreen
+                                      : Colors.grey.shade700,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    if (sip.connectionStatus == SipConnectionStatus.online)
+                                      BoxShadow(
+                                        color: AppConstants.accentGreen.withOpacity(0.4),
+                                        blurRadius: 16,
+                                        spreadRadius: 4,
+                                      ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.phone,
+                                  color: Colors.white,
+                                  size: 32,
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 16),
+                        ],
                       ),
                     ),
-                    if (_numberController.text.isNotEmpty)
-                      GestureDetector(
-                        onTap: _onBackspace,
-                        onLongPress: _onClear,
-                        child: const Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: Icon(Icons.backspace_outlined, color: AppConstants.textMuted, size: 24),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // Quick Extension Tag Shortcuts
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Row(
-                children: [
-                  _buildQuickTag('Odoo CSKH (1001)', '1001'),
-                  const SizedBox(width: 8),
-                  _buildQuickTag('Mobile 1 (1002)', '1002'),
-                  const SizedBox(width: 8),
-                  _buildQuickTag('Leader (1003)', '1003'),
-                ],
-              ),
-            ),
-
-            const Spacer(flex: 1),
-
-            // 3x4 Keypad Grid
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 36.0),
-              child: GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  crossAxisSpacing: 20,
-                  mainAxisSpacing: 16,
-                  childAspectRatio: 1.25,
-                ),
-                itemCount: _keys.length,
-                itemBuilder: (context, index) {
-                  final keyData = _keys[index];
-                  return _buildKeyButton(keyData['main']!, keyData['sub']!);
-                },
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Call Action Button
-            Center(
-              child: GestureDetector(
-                onTap: () => _makeCall(sip),
-                child: Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: sip.connectionStatus == SipConnectionStatus.online
-                        ? AppConstants.accentGreen
-                        : Colors.grey.shade700,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      if (sip.connectionStatus == SipConnectionStatus.online)
-                        BoxShadow(
-                          color: AppConstants.accentGreen.withOpacity(0.4),
-                          blurRadius: 16,
-                          spreadRadius: 4,
-                        ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.phone,
-                    color: Colors.white,
-                    size: 34,
                   ),
                 ),
               ),
-            ),
-
-            const Spacer(flex: 2),
-          ],
+            );
+          },
         ),
       ),
+    );
+  }
+
+  Widget _buildKeypadGrid() {
+    return Column(
+      children: [
+        _buildKeyRow(['1', '2', '3']),
+        const SizedBox(height: 12),
+        _buildKeyRow(['4', '5', '6']),
+        const SizedBox(height: 12),
+        _buildKeyRow(['7', '8', '9']),
+        const SizedBox(height: 12),
+        _buildKeyRow(['*', '0', '#']),
+      ],
+    );
+  }
+
+  Widget _buildKeyRow(List<String> keys) {
+    return Row(
+      children: keys.map((key) {
+        final keyData = _keys.firstWhere((k) => k['main'] == key);
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6.0),
+            child: AspectRatio(
+              aspectRatio: 1.45,
+              child: _buildKeyButton(keyData['main']!, keyData['sub']!),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 
   Widget _buildKeyButton(String mainText, String subText) {
     return InkWell(
       onTap: () => _onKeyPress(mainText),
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
           color: AppConstants.cardDark,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.white.withOpacity(0.06)),
           boxShadow: [
             BoxShadow(
@@ -253,28 +290,37 @@ class _DialpadScreenState extends State<DialpadScreen> {
             ),
           ],
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              mainText,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 26,
-                fontWeight: FontWeight.bold,
+        child: Center(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 2.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    mainText,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (subText.isNotEmpty)
+                    Text(
+                      subText,
+                      style: const TextStyle(
+                        color: AppConstants.textMuted,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                ],
               ),
             ),
-            if (subText.isNotEmpty)
-              Text(
-                subText,
-                style: const TextStyle(
-                  color: AppConstants.textMuted,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.5,
-                ),
-              ),
-          ],
+          ),
         ),
       ),
     );
