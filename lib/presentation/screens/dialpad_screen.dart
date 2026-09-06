@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/services/sip_manager.dart';
@@ -60,16 +61,36 @@ class _DialpadScreenState extends State<DialpadScreen> {
     });
   }
 
-  void _makeCall(SipManager sip) {
+  Future<void> _makeCall(SipManager sip) async {
     final number = _numberController.text.trim();
-    if (number.isNotEmpty) {
-      HapticFeedback.heavyImpact();
-      sip.makeCall(number);
-    } else {
+    if (number.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Vui lòng nhập số điện thoại hoặc số máy nhánh!'),
           backgroundColor: AppConstants.accentAmber,
+        ),
+      );
+      return;
+    }
+
+    HapticFeedback.heavyImpact();
+    final result = await sip.makeCall(number);
+    if (!mounted) return;
+
+    if (!result.isSuccess) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.message),
+          backgroundColor: AppConstants.accentRed,
+          duration: const Duration(seconds: 4),
+          action:
+              result.status == CallInitiationStatus.microphonePermanentlyDenied
+              ? SnackBarAction(
+                  label: 'Cài đặt',
+                  textColor: Colors.white,
+                  onPressed: () => openAppSettings(),
+                )
+              : null,
         ),
       );
     }
@@ -208,35 +229,73 @@ class _DialpadScreenState extends State<DialpadScreen> {
 
                           // Call Action Button
                           Center(
-                            child: GestureDetector(
-                              onTap: () => _makeCall(sip),
-                              child: Container(
-                                width: 68,
-                                height: 68,
-                                decoration: BoxDecoration(
-                                  color:
-                                      sip.connectionStatus ==
-                                          SipConnectionStatus.online
-                                      ? AppConstants.accentGreen
-                                      : Colors.grey.shade700,
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    if (sip.connectionStatus ==
-                                        SipConnectionStatus.online)
-                                      BoxShadow(
-                                        color: AppConstants.accentGreen
-                                            .withOpacity(0.4),
-                                        blurRadius: 16,
-                                        spreadRadius: 4,
-                                      ),
-                                  ],
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                GestureDetector(
+                                  onTap: sip.isDialing
+                                      ? null
+                                      : () => _makeCall(sip),
+                                  child: Container(
+                                    width: 68,
+                                    height: 68,
+                                    decoration: BoxDecoration(
+                                      color:
+                                          (sip.connectionStatus ==
+                                                  SipConnectionStatus.online &&
+                                              sip.helper.connected &&
+                                              sip.helper.registered &&
+                                              !sip.isDialing)
+                                          ? AppConstants.accentGreen
+                                          : Colors.grey.shade700,
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        if (sip.connectionStatus ==
+                                                SipConnectionStatus.online &&
+                                            sip.helper.connected &&
+                                            sip.helper.registered &&
+                                            !sip.isDialing)
+                                          BoxShadow(
+                                            color: AppConstants.accentGreen
+                                                .withOpacity(0.4),
+                                            blurRadius: 16,
+                                            spreadRadius: 4,
+                                          ),
+                                      ],
+                                    ),
+                                    child: sip.isDialing
+                                        ? const Center(
+                                            child: SizedBox(
+                                              width: 28,
+                                              height: 28,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 3,
+                                                valueColor:
+                                                    AlwaysStoppedAnimation<
+                                                      Color
+                                                    >(Colors.white),
+                                              ),
+                                            ),
+                                          )
+                                        : const Icon(
+                                            Icons.phone,
+                                            color: Colors.white,
+                                            size: 32,
+                                          ),
+                                  ),
                                 ),
-                                child: const Icon(
-                                  Icons.phone,
-                                  color: Colors.white,
-                                  size: 32,
-                                ),
-                              ),
+                                if (sip.isDialing) ...[
+                                  const SizedBox(height: 10),
+                                  const Text(
+                                    'Đang khởi tạo cuộc gọi...',
+                                    style: TextStyle(
+                                      color: AppConstants.accentAmber,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
 

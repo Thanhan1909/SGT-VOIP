@@ -30,8 +30,8 @@ class _InCallScreenState extends State<InCallScreen> {
     final call = sip.currentCall;
     final state = sip.callState?.state;
 
-    // Route Guard: Nếu F5 hoặc vào màn hình khi không có active call -> tự thoát về dialpad
-    if (call == null ||
+    // Route Guard: Nếu vào màn hình khi không có active call và không đang dialing -> tự thoát về dialpad
+    if ((call == null && !sip.isDialing) ||
         state == CallStateEnum.ENDED ||
         state == CallStateEnum.FAILED) {
       _popBack();
@@ -41,7 +41,9 @@ class _InCallScreenState extends State<InCallScreen> {
   void _popBack() {
     if (_isPopping || !mounted) return;
     _isPopping = true;
-    Navigator.of(context).popUntil((route) => route.isFirst);
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
   }
 
   void _onHangup(SipManager sip) {
@@ -56,7 +58,7 @@ class _InCallScreenState extends State<InCallScreen> {
     final state = sip.callState?.state;
 
     // Auto-exit guard: Lắng nghe sự kiện kết thúc cuộc gọi
-    if (call == null ||
+    if ((call == null && !sip.isDialing) ||
         state == CallStateEnum.ENDED ||
         state == CallStateEnum.FAILED) {
       WidgetsBinding.instance.addPostFrameCallback((_) {

@@ -42,7 +42,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   void _popBack() {
     if (_isPopping || !mounted) return;
     _isPopping = true;
-    Navigator.of(context).popUntil((route) => route.isFirst);
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
   }
 
   @override

@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, kDebugMode, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:sip_ua/sip_ua.dart';
@@ -18,6 +19,82 @@ enum CallScreenState { none, incoming, inCall }
 
 enum SipConnectionStatus { offline, connecting, registering, online, error }
 
+enum CallInitiationStatus {
+  started,
+  emptyNumber,
+  sipOffline,
+  transportDisconnected,
+  unregistered,
+  callAlreadyActive,
+  alreadyDialing,
+  microphoneDenied,
+  microphonePermanentlyDenied,
+  failed,
+}
+
+class CallInitiationResult {
+  final CallInitiationStatus status;
+  final String message;
+
+  const CallInitiationResult(this.status, this.message);
+
+  bool get isSuccess => status == CallInitiationStatus.started;
+
+  factory CallInitiationResult.started() => const CallInitiationResult(
+    CallInitiationStatus.started,
+    'Đang khởi tạo cuộc gọi...',
+  );
+
+  factory CallInitiationResult.emptyNumber() => const CallInitiationResult(
+    CallInitiationStatus.emptyNumber,
+    'Vui lòng nhập số điện thoại hoặc số máy nhánh',
+  );
+
+  factory CallInitiationResult.sipOffline() => const CallInitiationResult(
+    CallInitiationStatus.sipOffline,
+    'SIP chưa online. Đang kết nối lại...',
+  );
+
+  factory CallInitiationResult.transportDisconnected() =>
+      const CallInitiationResult(
+        CallInitiationStatus.transportDisconnected,
+        'WSS đã mất kết nối với máy chủ',
+      );
+
+  factory CallInitiationResult.unregistered() => const CallInitiationResult(
+    CallInitiationStatus.unregistered,
+    'Tài khoản chưa REGISTER với tổng đài',
+  );
+
+  factory CallInitiationResult.callAlreadyActive() =>
+      const CallInitiationResult(
+        CallInitiationStatus.callAlreadyActive,
+        'Đang có cuộc gọi khác đang hoạt động',
+      );
+
+  factory CallInitiationResult.alreadyDialing() => const CallInitiationResult(
+    CallInitiationStatus.alreadyDialing,
+    'Đang khởi tạo cuộc gọi, vui lòng đợi',
+  );
+
+  factory CallInitiationResult.microphoneDenied() => const CallInitiationResult(
+    CallInitiationStatus.microphoneDenied,
+    'Microphone bị từ chối. Cần cấp quyền để gọi',
+  );
+
+  factory CallInitiationResult.microphonePermanentlyDenied() =>
+      const CallInitiationResult(
+        CallInitiationStatus.microphonePermanentlyDenied,
+        'Microphone bị chặn vĩnh viễn. Vui lòng mở Cài đặt để cho phép',
+      );
+
+  factory CallInitiationResult.failed(String msg) =>
+      CallInitiationResult(CallInitiationStatus.failed, msg);
+
+  @override
+  String toString() => 'CallInitiationResult($status, $message)';
+}
+
 class SipManager extends ChangeNotifier
     with WidgetsBindingObserver
     implements SipUaHelperListener {
@@ -25,12 +102,15 @@ class SipManager extends ChangeNotifier
   factory SipManager() => _instance;
   SipManager._internal();
 
-  final SIPUAHelper _helper = SIPUAHelper();
+  SIPUAHelper _helper = SIPUAHelper();
   final AudioManager _audioManager = AudioManager();
 
   SipAccount? _account;
   SipConnectionStatus _connectionStatus = SipConnectionStatus.offline;
   String _statusMessage = 'Chưa kết nối';
+
+  bool _isDialing = false;
+  String? _pendingTargetNumber;
 
   Call? _currentCall;
   CallState? _callState;
@@ -72,6 +152,8 @@ class SipManager extends ChangeNotifier
   SipAccount? get account => _account;
   SipConnectionStatus get connectionStatus => _connectionStatus;
   String get statusMessage => _statusMessage;
+  bool get isDialing => _isDialing;
+  String? get pendingTargetNumber => _pendingTargetNumber;
   Call? get currentCall => _currentCall;
   CallState? get callState => _callState;
   bool get isMuted => _isMuted;
@@ -253,33 +335,112 @@ class SipManager extends ChangeNotifier
 
   // ── Call Actions ──────────────────────────────────────────────────────────
 
-  Future<void> makeCall(String targetNumber) async {
+  Future<CallInitiationResult> makeCall(String targetNumber) async {
     final cleanNumber = targetNumber.trim();
-    if (cleanNumber.isEmpty) return;
+    if (cleanNumber.isEmpty) {
+      _log('CALL_VALIDATE', 'makeCall rejected: cleanNumber is empty');
+      return CallInitiationResult.emptyNumber();
+    }
 
-    if (_connectionStatus != SipConnectionStatus.online) {
-      _log('SipManager', 'Cannot call: SIP is not online');
-      return;
+    if (_isDialing) {
+      _log(
+        'CALL_VALIDATE',
+        'makeCall rejected: already dialing ($cleanNumber)',
+      );
+      return CallInitiationResult.alreadyDialing();
+    }
+
+    if (_currentCall != null) {
+      _log('CALL_VALIDATE', 'makeCall rejected: a call is already active');
+      return CallInitiationResult.callAlreadyActive();
+    }
+
+    final isCustomOnline = _connectionStatus == SipConnectionStatus.online;
+    final isHelperConnected = _helper.connected;
+    final isHelperRegistered = _helper.registered;
+
+    _log(
+      'CALL_STATUS',
+      'Pre-call check: connectionStatus=$_connectionStatus, helperConnected=$isHelperConnected, helperRegistered=$isHelperRegistered',
+    );
+
+    if (!isCustomOnline || !isHelperConnected || !isHelperRegistered) {
+      final msg = !isHelperConnected
+          ? 'WSS đã mất kết nối với máy chủ'
+          : (!isHelperRegistered
+                ? 'Tài khoản chưa REGISTER với tổng đài'
+                : 'SIP chưa online. Đang kết nối lại...');
+      _statusMessage = msg;
+      _log(
+        'CALL_STATUS',
+        'State mismatch or offline: connectionStatus=$_connectionStatus, helperConnected=$isHelperConnected, helperRegistered=$isHelperRegistered',
+      );
+      notifyListeners();
+      if (!isHelperConnected) {
+        return CallInitiationResult.transportDisconnected();
+      } else if (!isHelperRegistered) {
+        return CallInitiationResult.unregistered();
+      } else {
+        return CallInitiationResult.sipOffline();
+      }
+    }
+
+    final acc = _account;
+    if (acc == null || !_hasRequiredAccountSettings(acc)) {
+      _statusMessage = 'Thiếu cấu hình tài khoản SIP';
+      _log(
+        'CALL_VALIDATE',
+        'makeCall rejected: missing account or required settings',
+      );
+      notifyListeners();
+      return CallInitiationResult.failed('Thiếu cấu hình tài khoản SIP');
+    }
+
+    _isDialing = true;
+    _pendingTargetNumber = cleanNumber;
+    notifyListeners();
+
+    // 1. Request Microphone Runtime Permission on iOS/Android
+    if (!kIsWeb) {
+      try {
+        var micStatus = await Permission.microphone.status;
+        _log('CALL_MIC', 'Microphone permission status: $micStatus');
+        if (micStatus.isPermanentlyDenied) {
+          _isDialing = false;
+          _pendingTargetNumber = null;
+          notifyListeners();
+          _log('CALL_MIC', 'Microphone permission permanently denied');
+          return CallInitiationResult.microphonePermanentlyDenied();
+        }
+        if (!micStatus.isGranted) {
+          micStatus = await Permission.microphone.request();
+          _log('CALL_MIC', 'Microphone permission requested: $micStatus');
+          if (micStatus.isPermanentlyDenied) {
+            _isDialing = false;
+            _pendingTargetNumber = null;
+            notifyListeners();
+            return CallInitiationResult.microphonePermanentlyDenied();
+          }
+          if (!micStatus.isGranted) {
+            _isDialing = false;
+            _pendingTargetNumber = null;
+            _statusMessage = 'Cần cấp quyền Microphone để gọi';
+            notifyListeners();
+            return CallInitiationResult.microphoneDenied();
+          }
+        }
+      } catch (e) {
+        _isDialing = false;
+        _pendingTargetNumber = null;
+        notifyListeners();
+        _log('CALL_MIC', 'Error requesting microphone permission: $e');
+        return CallInitiationResult.failed('Lỗi kiểm tra quyền Microphone: $e');
+      }
     }
 
     try {
-      _log('TIMING', '>>> makeCall initiated for $cleanNumber');
-      // 1. Request Microphone Runtime Permission on iOS/Android
-      if (!kIsWeb) {
-        var micStatus = await Permission.microphone.status;
-        if (!micStatus.isGranted) {
-          micStatus = await Permission.microphone.request();
-          if (!micStatus.isGranted) {
-            _log('SipManager', 'Microphone permission denied');
-            _statusMessage = 'Cần cấp quyền Microphone để gọi';
-            notifyListeners();
-            return;
-          }
-        }
-      }
-
-      final targetUri = 'sip:$cleanNumber@${_account!.domain}';
-      _diag('SipManager', 'Calling target: $targetUri');
+      final targetUri = 'sip:$cleanNumber@${acc.domain}';
+      _log('CALL_DIAL', 'Dialing target: $cleanNumber (URI: $targetUri)');
 
       // 2. Strict Voice-only constraints with Google WebRTC DSP filters
       final mediaConstraints = <String, dynamic>{
@@ -295,44 +456,68 @@ class SipManager extends ChangeNotifier
         'video': false,
       };
 
-      // 3. Reset timer and optimistic UI: Chuyển màn hình đàm thoại tức thì (0ms Delay)
+      // Reset timer and WebRTC diagnostics before initiating
       _stopCallTimer();
       _callDurationSeconds = 0;
       _resetWebRtcDiagnostics();
-      _navigateToInCall();
-      notifyListeners();
 
-      _log('TIMING', 'Sending SIP INVITE...');
-      // 4. Gửi gói tin SIP INVITE WebRTC
       final callOptions = _helper.buildCallOptions(true);
       callOptions['mediaConstraints'] = mediaConstraints;
       _applyIceTransportPolicy(callOptions);
-      _helper.call(targetUri, voiceonly: true, customOptions: callOptions);
+
+      _log('CALL_HELPER', 'Calling _helper.call for $cleanNumber...');
+      final started = await _helper.call(
+        targetUri,
+        voiceonly: true,
+        customOptions: callOptions,
+      );
+      _log('CALL_HELPER', '_helper.call returned $started for $cleanNumber');
+
+      if (!started) {
+        _isDialing = false;
+        _pendingTargetNumber = null;
+        _statusMessage = 'Không thể tạo phiên gọi SIP';
+        notifyListeners();
+        return CallInitiationResult.failed(
+          'Không thể tạo phiên gọi SIP (SIPUAHelper.call trả về false)',
+        );
+      }
+
+      return CallInitiationResult.started();
     } catch (e, stack) {
-      _log('SipManager', 'Error during makeCall: $e\n$stack');
+      _isDialing = false;
+      _pendingTargetNumber = null;
+      _log('CALL_ERROR', 'Exception during makeCall: $e\n$stack');
+      _statusMessage = 'Lỗi khởi tạo cuộc gọi: $e';
+      notifyListeners();
+      return CallInitiationResult.failed('Lỗi khởi tạo cuộc gọi: $e');
     }
   }
 
   Future<void> answerCall() async {
-    if (_currentCall != null) {
+    final call = _currentCall;
+    if (call != null) {
       try {
-        _log('TIMING', '>>> answerCall clicked by user');
+        _log('TIMING', '>>> answerCall clicked by user (id=${call.id})');
         if (!kIsWeb) {
           var micStatus = await Permission.microphone.status;
           if (!micStatus.isGranted) {
             micStatus = await Permission.microphone.request();
             if (!micStatus.isGranted) {
-              _log('SipManager', 'Microphone permission denied');
+              _log('CALL_MIC', 'Microphone permission denied on answerCall');
+              _statusMessage = 'Cần cấp quyền Microphone để trả lời cuộc gọi';
+              notifyListeners();
               return;
             }
           }
         }
         _audioManager.stopAll();
-        _log('TIMING', 'Sending _currentCall!.answer()...');
+        _log('TIMING', 'Answering call id=${call.id}...');
         final answerOptions = _helper.buildCallOptions(true);
         _applyIceTransportPolicy(answerOptions);
-        _currentCall!.answer(answerOptions);
+        call.answer(answerOptions);
         _startCallTimer();
+        _navigateToInCall();
         notifyListeners();
       } catch (e, stack) {
         _log('SipManager', 'Error during answerCall: $e\n$stack');
@@ -341,6 +526,8 @@ class SipManager extends ChangeNotifier
   }
 
   void hangupCall() {
+    _isDialing = false;
+    _pendingTargetNumber = null;
     _audioManager.stopAll();
     _stopCallTimer();
     _stopWebRtcStatsCollection();
@@ -354,6 +541,7 @@ class SipManager extends ChangeNotifier
     }
     _currentCall = null;
     _callState = null;
+    _navigateBackToDialpad();
     notifyListeners();
   }
 
@@ -692,21 +880,30 @@ class SipManager extends ChangeNotifier
       'TIMING',
       'callStateChanged: state=${state.state}, origin=${call.direction}, id=${call.id}',
     );
+    // Crucial: assign _currentCall and _callState BEFORE any navigation
     _currentCall = call;
     _callState = state;
 
     switch (state.state) {
       case CallStateEnum.CALL_INITIATION:
+        _isDialing = false;
+        _pendingTargetNumber = null;
         _stopCallTimer();
         _resetWebRtcDiagnostics();
         _callDurationSeconds = 0;
         if (call.direction.toUpperCase() == 'INCOMING') {
           _log(
-            'TIMING',
+            'CALL_INITIATION',
             '>>> INCOMING INVITE received! Starting ringtone and navigating to incoming call screen.',
           );
           _audioManager.playRingtone();
           _navigateToIncomingCall();
+        } else {
+          _log(
+            'CALL_INITIATION',
+            '>>> OUTGOING call initiated (id=${call.id}). Navigating to in-call screen.',
+          );
+          _navigateToInCall();
         }
         break;
 
@@ -773,6 +970,8 @@ class SipManager extends ChangeNotifier
           'TIMING',
           '>>> Call ${state.state} (origin=${call.direction}, cause=${state.cause})',
         );
+        _isDialing = false;
+        _pendingTargetNumber = null;
         _audioManager.stopAll();
         _stopCallTimer();
         _stopWebRtcStatsCollection();
@@ -880,5 +1079,48 @@ class SipManager extends ChangeNotifier
         _log('SipManager', 'Navigate back error: $e');
       }
     }
+  }
+
+  // ── Testing Helpers ───────────────────────────────────────────────────────
+
+  @visibleForTesting
+  void setHelperForTesting(SIPUAHelper helper) {
+    _helper = helper;
+  }
+
+  @visibleForTesting
+  void setConnectionStatusForTesting(SipConnectionStatus status) {
+    _connectionStatus = status;
+  }
+
+  @visibleForTesting
+  void setAccountForTesting(SipAccount account) {
+    _account = account;
+  }
+
+  @visibleForTesting
+  void setCurrentCallForTesting(Call? call, CallState? state) {
+    _currentCall = call;
+    _callState = state;
+  }
+
+  @visibleForTesting
+  void setIsDialingForTesting(bool dialing) {
+    _isDialing = dialing;
+  }
+
+  @visibleForTesting
+  void resetForTesting() {
+    _currentCall = null;
+    _callState = null;
+    _isDialing = false;
+    _pendingTargetNumber = null;
+    _callScreenState = CallScreenState.none;
+    _connectionStatus = SipConnectionStatus.offline;
+    _statusMessage = 'Chưa kết nối';
+    _callTimer?.cancel();
+    _callTimer = null;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
   }
 }
