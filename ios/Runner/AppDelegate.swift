@@ -140,10 +140,12 @@ import AVFoundation
 
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
         NSLog("[CallKit] Audio session activated")
+        methodChannel?.invokeMethod("onAudioSessionState", arguments: ["active": true])
     }
 
     func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
         NSLog("[CallKit] Audio session deactivated")
+        methodChannel?.invokeMethod("onAudioSessionState", arguments: ["active": false])
     }
 
     // MARK: - PushKit Setup
@@ -157,9 +159,17 @@ import AVFoundation
     func pushRegistry(_ registry: PKPushRegistry, didUpdate pushCredentials: PKPushCredentials, for type: PKPushType) {
         guard type == .voIP else { return }
         let token = pushCredentials.token.map { String(format: "%02.2hhx", $0) }.joined()
-        NSLog("[PushKit] VoIP push token received: %@", token)
+        let maskedToken = token.count > 10 ? "\(token.prefix(4))...\(token.suffix(4))" : "***"
+        NSLog("[PushKit] VoIP push token received: %@", maskedToken)
         self.cachedVoipToken = token
         methodChannel?.invokeMethod("onVoipToken", arguments: ["token": token])
+    }
+
+    func pushRegistry(_ registry: PKPushRegistry, didInvalidatePushTokenFor type: PKPushType) {
+        guard type == .voIP else { return }
+        NSLog("[PushKit] VoIP push token invalidated")
+        self.cachedVoipToken = nil
+        methodChannel?.invokeMethod("onVoipTokenInvalidated", arguments: nil)
     }
 
     func pushRegistry(
@@ -174,9 +184,45 @@ import AVFoundation
         }
 
         let dict = payload.dictionaryPayload
-        NSLog("[PushKit] Received incoming VoIP push payload: %@", dict)
+        let action = dict["action"] as? String ?? "incoming_call"
 
-        let callUuid = dict["call_uuid"] as? String ?? UUID().uuidString
+        // Handle remote cancel without reporting a new call
+        if action == "cancel_call" {
+            if let callUuid = dict["call_uuid"] as? String {
+                NSLog("[PushKit] Received remote cancel for call UUID: %@", callUuid)
+                self.endCall(callUuidStr: callUuid)
+                methodChannel?.invokeMethod("onCallAction", arguments: [
+                    "action": "cancel",
+                    "callUuid": callUuid
+                ])
+            }
+            completion()
+            return
+        }
+
+        // Check for stale/expired push
+        if let timestamp = dict["timestamp"] as? Double {
+            let age = Date().timeIntervalSince1970 - timestamp
+            if age > 30.0 {
+                NSLog("[PushKit] Ignoring stale VoIP push (age: %.1fs)", age)
+                completion()
+                return
+            }
+        }
+
+        guard let callUuid = dict["call_uuid"] as? String, !callUuid.isEmpty else {
+            NSLog("[PushKit] Push payload missing call_uuid, ignoring")
+            completion()
+            return
+        }
+
+        // Deduplicate incoming call pushes
+        if activeCallUuids[callUuid] != nil {
+            NSLog("[PushKit] Incoming call already active for %@, ignoring duplicate push", callUuid)
+            completion()
+            return
+        }
+
         let callerName = dict["caller_display_name"] as? String ?? ""
         let callerNumber = dict["caller_extension"] as? String ?? ""
 

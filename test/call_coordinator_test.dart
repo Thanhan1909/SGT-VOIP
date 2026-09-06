@@ -11,6 +11,8 @@ class MockNativeCallBridge implements NativeCallBridge {
 
   final List<String> shownCalls = [];
   final List<String> dismissedCalls = [];
+  Map<String, String>? pendingAction;
+  bool ackCalled = false;
 
   void emitAction(String action, String callUuid) {
     _actionController.add({'action': action, 'callUuid': callUuid});
@@ -38,6 +40,19 @@ class MockNativeCallBridge implements NativeCallBridge {
 
   @override
   Future<bool> canUseFullScreenIntent() async => true;
+
+  @override
+  Future<bool> requestNotificationPermission() async => true;
+
+  @override
+  Future<Map<String, String>?> getPendingCallAction() async => pendingAction;
+
+  @override
+  Future<bool> ackCallAction() async {
+    ackCalled = true;
+    pendingAction = null;
+    return true;
+  }
 
   @override
   Future<String?> getVoipToken() async => 'mock_voip_token_123';
@@ -227,6 +242,117 @@ void main() {
         await pumpEventQueue();
 
         expect(mockDelegate.ensureConnectedCount, equals(1));
+      },
+    );
+
+    test('8. Mismatched UUID: user answered call A, call B arrives', () async {
+      mockDelegate.activeCall = false;
+
+      // User answered call A
+      mockBridge.emitAction('answer', 'call-A');
+      await pumpEventQueue();
+
+      expect(coordinator.pendingAnswerUuid, equals('call-A'));
+
+      // Call B arrives
+      final autoAnswered = coordinator.onIncomingCallReceived(
+        callUuid: 'call-B',
+        callerName: 'Caller B',
+        callerNumber: '203',
+        isAppForeground: false,
+      );
+
+      // Must NOT answer call B!
+      expect(autoAnswered, isFalse);
+      expect(mockDelegate.answerCallsCount, equals(0));
+      expect(coordinator.activeCallUuid, equals('call-B'));
+      // Call A remains pending until its own INVITE or timeout
+      expect(coordinator.pendingAnswerUuid, equals('call-A'));
+    });
+
+    test(
+      '9. Decline prior to INVITE arrival drops the call upon INVITE',
+      () async {
+        mockDelegate.activeCall = false;
+
+        // User declined call C before INVITE arrived
+        mockBridge.emitAction('decline', 'call-C');
+        await pumpEventQueue();
+
+        expect(coordinator.declinedCallUuids, contains('call-C'));
+        expect(mockBridge.dismissedCalls, contains('call-C'));
+
+        // Now INVITE arrives for call C
+        mockDelegate.activeCall = true;
+        final autoAnswered = coordinator.onIncomingCallReceived(
+          callUuid: 'call-C',
+          callerName: 'Caller C',
+          callerNumber: '201',
+          isAppForeground: false,
+        );
+
+        expect(autoAnswered, isFalse);
+        expect(mockDelegate.hangupCallsCount, equals(1));
+        expect(coordinator.declinedCallUuids, isNot(contains('call-C')));
+      },
+    );
+
+    test('10. Remote cancel prior to INVITE arrival dismisses UI', () async {
+      mockBridge.emitAction('cancel', 'call-cancelled');
+      await pumpEventQueue();
+
+      expect(mockBridge.dismissedCalls, contains('call-cancelled'));
+      expect(coordinator.isNativeIncomingShown, isFalse);
+    });
+
+    test('11. Call A ends, then Call B arrives cleanly', () async {
+      // Call A
+      coordinator.onIncomingCallReceived(
+        callUuid: 'call-A-seq',
+        callerName: 'Caller A',
+        callerNumber: '201',
+        isAppForeground: false,
+      );
+      coordinator.onCallConfirmed('call-A-seq');
+      coordinator.onCallTerminated('call-A-seq');
+
+      expect(coordinator.activeCallUuid, isNull);
+      expect(coordinator.pendingAnswerUuid, isNull);
+
+      // Call B
+      final autoAnswered = coordinator.onIncomingCallReceived(
+        callUuid: 'call-B-seq',
+        callerName: 'Caller B',
+        callerNumber: '202',
+        isAppForeground: false,
+      );
+
+      expect(autoAnswered, isFalse);
+      expect(coordinator.activeCallUuid, equals('call-B-seq'));
+    });
+
+    test(
+      '12. Cold start durable pending action is consumed and ACKed',
+      () async {
+        final freshBridge = MockNativeCallBridge();
+        freshBridge.pendingAction = {
+          'action': 'answer',
+          'callUuid': 'cold-call-99',
+        };
+        final freshDelegate = MockCallHandlerDelegate();
+
+        final freshCoord = CallCoordinator(
+          nativeCallBridge: freshBridge,
+          delegate: freshDelegate,
+        );
+
+        await pumpEventQueue();
+
+        expect(freshCoord.pendingAnswerUuid, equals('cold-call-99'));
+        expect(freshBridge.ackCalled, isTrue);
+
+        freshCoord.dispose();
+        freshBridge.dispose();
       },
     );
   });

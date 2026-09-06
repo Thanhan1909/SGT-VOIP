@@ -200,10 +200,10 @@ Quy trình CI trên GitHub Actions tự động kiểm thử và tạo các arti
 - **Cấu trúc gói:** Cấu trúc IPA chuẩn chứa thư mục `Payload/Runner.app` (bao gồm `Info.plist`, binary thực thi `Runner` và thư viện dynamic `Frameworks/`).
 
 > [!WARNING]
-> **Lưu ý quan trọng về bản build iOS Unsigned IPA:**
+> **Lưu ý quan trọng về bản build iOS Unsigned IPA & VoIP Push:**
 > 1. **Chưa được Apple ký (Unsigned):** Bản build được tạo bằng `flutter build ios --release --no-codesign`.
 > 2. **Không có Provisioning Profile hợp lệ:** Gói IPA không chứa tệp `embedded.mobileprovision`.
 > 3. **Không cài trực tiếp bằng 3uTools:** Thiết bị iOS sẽ từ chối cài đặt trực tiếp file IPA chưa ký.
 > 4. **Cần Re-sign trước khi cài:** Phải sử dụng công cụ sideloading (như **Sideloadly**, **AltStore**) hoặc Apple Developer Certificate hợp lệ để ký lại (re-sign) trước khi cài đặt lên iPhone/iPad.
-> 5. **Giới hạn tài khoản miễn phí:** Nếu sử dụng Apple ID cá nhân miễn phí để re-sign, chứng chỉ sẽ có thời hạn tối đa 7 ngày và có thể bị giới hạn các quyền entitlement nâng cao (như VoIP background push).
-> 6. **Không phải Production IPA:** Tuyệt đối không tuyên bố hoặc phân phối gói IPA này như một bản phát hành Production chính thức.
+> 5. **VoIP PushKit Entitlement:** Các công cụ re-sign tự do hoặc tài khoản miễn phí (Sideloadly / 7 ngày) **không bảo đảm** duy trì được entitlement VoIP Push (`aps-environment` / PushKit). PushKit thực tế chỉ hoạt động khi ứng dụng được ký bằng **Apple Developer Provisioning Profile** chính thức có bật VoIP Services.
+> 6. **Không tuyên bố là Production build:** Unsigned IPA hoàn toàn là artifact staging/development; tuyệt đối không tuyên bố hoặc phân phối gói này như bản phát hành Production chính thức.

@@ -13,6 +13,12 @@ abstract class NativeCallBridge {
 
   Future<bool> canUseFullScreenIntent();
 
+  Future<bool> requestNotificationPermission();
+
+  Future<Map<String, String>?> getPendingCallAction();
+
+  Future<bool> ackCallAction();
+
   Future<String?> getVoipToken();
 
   Stream<Map<String, String>> get callActionStream;
@@ -52,6 +58,10 @@ class MethodChannelNativeCallBridge implements NativeCallBridge {
         if (token.isNotEmpty) {
           _voipTokenController.add(token);
         }
+        break;
+
+      case 'onVoipTokenInvalidated':
+        _voipTokenController.add('');
         break;
 
       default:
@@ -109,6 +119,46 @@ class MethodChannelNativeCallBridge implements NativeCallBridge {
       return res ?? true;
     } catch (e) {
       return true;
+    }
+  }
+
+  @override
+  Future<bool> requestNotificationPermission() async {
+    if (kIsWeb) return false;
+    try {
+      final res = await _channel.invokeMethod<bool>(
+        'requestNotificationPermission',
+      );
+      return res ?? true;
+    } catch (e) {
+      return true;
+    }
+  }
+
+  @override
+  Future<Map<String, String>?> getPendingCallAction() async {
+    if (kIsWeb) return null;
+    try {
+      final res = await _channel.invokeMethod<Map>('getPendingCallAction');
+      if (res != null) {
+        return Map<String, dynamic>.from(
+          res,
+        ).map((k, v) => MapEntry(k.toString(), v.toString()));
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  @override
+  Future<bool> ackCallAction() async {
+    if (kIsWeb) return false;
+    try {
+      final res = await _channel.invokeMethod<bool>('ackCallAction');
+      return res ?? true;
+    } catch (e) {
+      return false;
     }
   }
 

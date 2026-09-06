@@ -14,6 +14,7 @@ class CallForegroundService : Service() {
         private const val TAG = "CallForegroundService"
         const val ACTION_START_INCOMING = "com.sgt.voip.softphone.ACTION_START_INCOMING_CALL"
         const val ACTION_STOP_CALL = "com.sgt.voip.softphone.ACTION_STOP_CALL"
+        var currentCallUuid: String? = null
 
         fun startIncomingCall(context: Context, callUuid: String, callerName: String, callerNumber: String) {
             val intent = Intent(context, CallForegroundService::class.java).apply {
@@ -54,6 +55,7 @@ class CallForegroundService : Service() {
                 val callUuid = intent.getStringExtra(CallNotificationHelper.EXTRA_CALL_UUID) ?: ""
                 val callerName = intent.getStringExtra(CallNotificationHelper.EXTRA_CALLER_NAME) ?: ""
                 val callerNumber = intent.getStringExtra(CallNotificationHelper.EXTRA_CALLER_NUMBER) ?: ""
+                currentCallUuid = callUuid
 
                 val notification = CallNotificationHelper.buildIncomingCallNotification(
                     this,
@@ -80,6 +82,7 @@ class CallForegroundService : Service() {
                 }
             }
             ACTION_STOP_CALL -> {
+                currentCallUuid = null
                 CallNotificationHelper.dismissCallNotification(this)
                 stopForeground(true)
                 stopSelf()
@@ -89,6 +92,7 @@ class CallForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        currentCallUuid = null
         CallNotificationHelper.dismissCallNotification(this)
         super.onDestroy()
     }

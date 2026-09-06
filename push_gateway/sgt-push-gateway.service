@@ -1,6 +1,8 @@
 [Unit]
 Description=SGT VoIP Push Gateway Service
 After=network.target asterisk.service
+StartLimitIntervalSec=60s
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -8,10 +10,20 @@ User=an-sgt
 Group=an-sgt
 WorkingDirectory=/home/an-sgt/odoo19_01/push_gateway
 Environment="PATH=/home/an-sgt/odoo19_01/push_gateway/venv/bin:/usr/local/bin:/usr/bin"
-Environment="GATEWAY_DB_PATH=/var/lib/sgt-push-gateway/gateway.db"
+EnvironmentFile=-/etc/sgt-push-gateway/gateway.env
+StateDirectory=sgt-push-gateway
+StateDirectoryMode=0700
+
+# Security Hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/var/lib/sgt-push-gateway /home/an-sgt/odoo19_01/push_gateway
+
 ExecStart=/home/an-sgt/odoo19_01/push_gateway/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8085
-Restart=always
-RestartSec=3
+Restart=on-failure
+RestartSec=5s
 
 [Install]
 WantedBy=multi-user.target

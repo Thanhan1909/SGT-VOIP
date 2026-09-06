@@ -54,3 +54,14 @@ push_gateway/*.sqlite*
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# Credentials & Secrets
+**/google-services.json
+**/key.properties
+**/*.keystore
+**/*.jks
+**/*.p8
+**/*.p12
+**/*.mobileprovision
+gateway.env
+/etc/sgt-push-gateway/gateway.env

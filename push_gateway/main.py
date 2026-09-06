@@ -1,11 +1,14 @@
-"""FastAPI application for SGT VoIP Push Gateway."""
+"""FastAPI application for SGT VoIP Push Gateway with authentication and security hardening."""
 
+import os
+import time
 import logging
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Optional, Dict
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, Depends, HTTPException, Header, Request, Response, status
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from database import (
     init_db,
@@ -15,6 +18,7 @@ from database import (
     create_or_update_call,
     update_call_status,
     get_call,
+    mask_token,
 )
 from models import (
     DeviceRegisterRequest,
@@ -32,12 +36,33 @@ logging.basicConfig(
 )
 logger = logging.getLogger("sgt_push_gateway")
 
+# Secrets from environment or /etc/sgt-push-gateway/gateway.env
+INTERNAL_API_SECRET = os.getenv("INTERNAL_API_SECRET", "sgt_internal_voip_secret_2026")
+DEVICE_AUTH_SECRET = os.getenv("DEVICE_AUTH_SECRET", INTERNAL_API_SECRET)
+
 push_sender = PushSender()
+
+
+class MaxBodySizeMiddleware(BaseHTTPMiddleware):
+    """Prevent Denial-of-Service via oversized request payloads."""
+
+    def __init__(self, app, max_bytes: int = 32768):
+        super().__init__(app)
+        self.max_bytes = max_bytes
+
+    async def dispatch(self, request: Request, call_next):
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > self.max_bytes:
+            return Response(
+                content='{"success": false, "message": "Payload exceeds maximum allowed size (32KB)"}',
+                status_code=getattr(status, "HTTP_413_CONTENT_TOO_LARGE", 413),
+                media_type="application/json",
+            )
+        return await call_next(request)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: ensure tables exist
     init_db()
     logger.info("SGT VoIP Push Gateway initialized and ready on port 8085.")
     yield
@@ -46,24 +71,100 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="SGT VoIP Push Gateway",
-    version="1.0.0",
-    description="Push notification broker for SGT Softphone incoming calls (FCM & APNs)",
+    version="1.1.0",
+    description="Secure Push notification broker for SGT Softphone incoming calls (FCM & APNs)",
     lifespan=lifespan,
 )
 
+app.add_middleware(MaxBodySizeMiddleware, max_bytes=32768)
+
+
+# =========================================================================
+# Authentication Dependencies
+# =========================================================================
+
+async def verify_internal_auth(
+    request: Request,
+    x_internal_secret: Optional[str] = Header(None, alias="X-Internal-Secret"),
+    authorization: Optional[str] = Header(None),
+):
+    """Authenticate internal Asterisk and system calls."""
+    token = x_internal_secret
+    if not token and authorization and authorization.startswith("Bearer "):
+        token = authorization[7:].strip()
+
+    if not token:
+        logger.warning(f"Unauthorized internal access attempt from {request.client.host if request.client else 'unknown'}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing internal authentication credentials",
+        )
+
+    if token != INTERNAL_API_SECRET:
+        logger.warning(f"Forbidden internal access attempt (invalid secret) from {request.client.host if request.client else 'unknown'}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid internal authentication credentials",
+        )
+
+
+async def verify_device_auth(
+    request: Request,
+    x_device_token: Optional[str] = Header(None, alias="X-Device-Auth-Token"),
+    authorization: Optional[str] = Header(None),
+):
+    """Authenticate mobile device registrations to prevent unauthorized spoofing."""
+    token = x_device_token
+    if not token and authorization and authorization.startswith("Bearer "):
+        token = authorization[7:].strip()
+
+    # If DEVICE_AUTH_SECRET is configured, enforce matching
+    if DEVICE_AUTH_SECRET:
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Missing device authentication token",
+            )
+        if token != DEVICE_AUTH_SECRET:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid device authentication token",
+            )
+
+
+# =========================================================================
+# Public Endpoints
+# =========================================================================
 
 @app.get("/health", response_model=ApiResponse)
 async def health_check():
+    """Health check exposing overall service status and provider readiness."""
+    providers_info = push_sender.get_provider_status()
+    is_degraded = (
+        providers_info["fcm"]["status"] != "configured"
+        and providers_info["apns"]["status"] != "configured"
+        and not push_sender.test_mode
+    )
+
     return ApiResponse(
         success=True,
-        message="SGT VoIP Push Gateway is running healthy",
-        data={"status": "ok", "service": "sgt-push-gateway"},
+        message="SGT VoIP Push Gateway is running" + (" (providers degraded)" if is_degraded else ""),
+        data={
+            "service": "sgt-push-gateway",
+            "status": "degraded" if is_degraded else "ok",
+            "database": "connected",
+            "providers": providers_info,
+        },
     )
 
 
-@app.post("/api/v1/devices/register", response_model=ApiResponse)
+# =========================================================================
+# Device Registration Endpoints (Protected by Device Auth)
+# =========================================================================
+
+@app.post("/api/v1/devices/register", response_model=ApiResponse, dependencies=[Depends(verify_device_auth)])
 async def register_device(req: DeviceRegisterRequest):
-    """Register or refresh mobile push token from Flutter client."""
+    """Register or refresh mobile push token from mobile client."""
     try:
         upsert_device_token(
             extension=req.extension,
@@ -73,8 +174,9 @@ async def register_device(req: DeviceRegisterRequest):
             push_environment=req.push_environment,
             app_version=req.app_version,
         )
+        masked = mask_token(req.push_token)
         logger.info(
-            f"Device token registered: ext={req.extension}, platform={req.platform}, device_id={req.device_id}"
+            f"Device token registered: ext={req.extension}, platform={req.platform}, device_id={req.device_id}, token={masked}"
         )
         return ApiResponse(
             success=True,
@@ -89,11 +191,11 @@ async def register_device(req: DeviceRegisterRequest):
         logger.error(f"Error registering device token: {ex}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to register token: {str(ex)}",
+            detail="Failed to register token",
         )
 
 
-@app.post("/api/v1/devices/revoke", response_model=ApiResponse)
+@app.post("/api/v1/devices/revoke", response_model=ApiResponse, dependencies=[Depends(verify_device_auth)])
 async def revoke_device(req: DeviceRevokeRequest):
     """Revoke push token when user logs out."""
     revoked = revoke_device_token(extension=req.extension, device_id=req.device_id)
@@ -105,10 +207,10 @@ async def revoke_device(req: DeviceRevokeRequest):
     )
 
 
-@app.get("/api/v1/devices/tokens/{extension}", response_model=ApiResponse)
+@app.get("/api/v1/devices/tokens/{extension}", response_model=ApiResponse, dependencies=[Depends(verify_internal_auth)])
 async def get_extension_tokens(extension: str):
-    """Query active tokens for an extension (diagnostic endpoint)."""
-    tokens = get_active_tokens_for_extension(extension)
+    """Query active tokens for an extension (Internal/Diagnostic only, tokens masked)."""
+    tokens = get_active_tokens_for_extension(extension, redact_tokens=True)
     return ApiResponse(
         success=True,
         message=f"Found {len(tokens)} active token(s) for extension {extension}",
@@ -116,7 +218,11 @@ async def get_extension_tokens(extension: str):
     )
 
 
-@app.post("/api/v1/internal/push/incoming", response_model=ApiResponse)
+# =========================================================================
+# Internal Asterisk Dialplan Endpoints (Protected by Internal Secret)
+# =========================================================================
+
+@app.post("/api/v1/internal/push/incoming", response_model=ApiResponse, dependencies=[Depends(verify_internal_auth)])
 async def trigger_incoming_push(req: IncomingPushRequest):
     """Trigger incoming call push notification (called by Asterisk dialplan / AGI)."""
     logger.info(
@@ -135,7 +241,7 @@ async def trigger_incoming_push(req: IncomingPushRequest):
     )
 
     # 2. Look up active device tokens for callee
-    tokens = get_active_tokens_for_extension(req.callee_extension)
+    tokens = get_active_tokens_for_extension(req.callee_extension, redact_tokens=False)
     if not tokens:
         logger.warning(f"No active device tokens found for callee extension {req.callee_extension}")
         return ApiResponse(
@@ -157,14 +263,14 @@ async def trigger_incoming_push(req: IncomingPushRequest):
         )
         results.append(res)
 
-    sent_count = sum(1 for r in results if r.get("status") in ("sent", "delivered_sandbox"))
+    sent_count = sum(1 for r in results if r.get("status") in ("sent", "test_mock_dispatched"))
     logger.info(
         f"Incoming push dispatched for call_uuid={req.call_uuid}: {sent_count}/{len(tokens)} successful"
     )
 
     return ApiResponse(
-        success=True,
-        message=f"Dispatched push to {sent_count} device(s)",
+        success=sent_count > 0,
+        message=f"Dispatched push to {sent_count}/{len(tokens)} device(s)",
         data={
             "call_uuid": req.call_uuid,
             "target_extension": req.callee_extension,
@@ -174,7 +280,7 @@ async def trigger_incoming_push(req: IncomingPushRequest):
     )
 
 
-@app.post("/api/v1/internal/push/cancel", response_model=ApiResponse)
+@app.post("/api/v1/internal/push/cancel", response_model=ApiResponse, dependencies=[Depends(verify_internal_auth)])
 async def trigger_cancel_push(req: CancelPushRequest):
     """Trigger call cancellation push (called by Asterisk hangup handler when caller aborts)."""
     logger.info(f"Call cancel push request: call_uuid={req.call_uuid}, reason={req.reason}")
@@ -193,7 +299,7 @@ async def trigger_cancel_push(req: CancelPushRequest):
 
     # 2. Dispatch cancel push to callee's devices
     callee_ext = call_record.get("callee_extension")
-    tokens = get_active_tokens_for_extension(callee_ext) if callee_ext else []
+    tokens = get_active_tokens_for_extension(callee_ext, redact_tokens=False) if callee_ext else []
 
     results = []
     for token_info in tokens:
@@ -204,7 +310,7 @@ async def trigger_cancel_push(req: CancelPushRequest):
         )
         results.append(res)
 
-    sent_count = sum(1 for r in results if r.get("status") in ("sent", "delivered_sandbox"))
+    sent_count = sum(1 for r in results if r.get("status") in ("sent", "test_mock_dispatched"))
     return ApiResponse(
         success=True,
         message=f"Dispatched cancellation push to {sent_count} device(s)",
@@ -212,7 +318,7 @@ async def trigger_cancel_push(req: CancelPushRequest):
     )
 
 
-@app.post("/api/v1/internal/call/event", response_model=ApiResponse)
+@app.post("/api/v1/internal/call/event", response_model=ApiResponse, dependencies=[Depends(verify_internal_auth)])
 async def update_call_event(req: CallEventRequest):
     """Update call state from client or Asterisk."""
     updated = update_call_status(req.call_uuid, req.status)

@@ -10,33 +10,40 @@ clearglobalvars=no
 ; ==========================================================
 [sub-push-dial]
 exten => s,1,NoOp(=== SUB-PUSH-DIAL: CALLER=${CALLERID(num)} TO=${ARG1} TIMEOUT=${ARG2} ===)
- same => n,Set(TARGET_EXT=${ARG1})
+ same => n,Set(TARGET_EXT=${FILTER(0-9,${ARG1})})
  same => n,Set(CALL_TIMEOUT=${IF($["${ARG2}" != ""]?${ARG2}:30)})
- same => n,Set(CALL_UUID=${IF($["${SIP_CALL_ID}" != ""]?${SIP_CALL_ID}:${UNIQUEID})})
+ same => n,Set(RAW_CALL_ID=${PJSIP_HEADER(read,Call-ID)})
+ same => n,Set(CALL_UUID=${IF($["${RAW_CALL_ID}" != ""]?${RAW_CALL_ID}:${UNIQUEID})})
+ same => n,Set(SAFE_UUID=${FILTER(0-9a-zA-Z_.-,${CALL_UUID})})
+ same => n,Set(SAFE_CALLER=${FILTER(0-9*#+,${CALLERID(num)})})
+ same => n,Set(SAFE_NAME=${FILTER(0-9a-zA-Z _.-,${CALLERID(name)})})
+ ; Trigger push in background (fire-and-forget, non-blocking) to wake up mobile even if contact is stale
+ same => n,System(/home/an-sgt/odoo19_01/push_gateway/asterisk_push_trigger.py incoming --call-uuid "${SAFE_UUID}" --caller "${SAFE_CALLER}" --caller-name "${SAFE_NAME}" --callee "${TARGET_EXT}" --ttl 30 &)
  same => n,Set(CONTACTS=${PJSIP_DIAL_CONTACTS(${TARGET_EXT})})
  same => n,GotoIf($["${CONTACTS}" != ""]?do_dial)
- ; Callee currently offline/asleep -> trigger VoIP push wakeup
- same => n,NoOp(--- TARGET ${TARGET_EXT} HAS NO ACTIVE CONTACTS. TRIGGERING PUSH WAKEUP ---)
- same => n,System(/home/an-sgt/odoo19_01/push_gateway/asterisk_push_trigger.py incoming --call-uuid "${CALL_UUID}" --caller "${CALLERID(num)}" --caller-name "${CALLERID(name)}" --callee "${TARGET_EXT}" --ttl 30 &)
+ ; Target has no active contacts -> wait up to 10s for registration
+ same => n,NoOp(--- TARGET ${TARGET_EXT} HAS NO ACTIVE CONTACTS. WAITING UP TO 10S ---)
  same => n,Ringing()
  same => n,Set(WAIT_COUNT=0)
  same => n(wait_loop),Wait(1)
  same => n,Set(CONTACTS=${PJSIP_DIAL_CONTACTS(${TARGET_EXT})})
  same => n,GotoIf($["${CONTACTS}" != ""]?do_dial)
  same => n,Set(WAIT_COUNT=$[${WAIT_COUNT} + 1])
- same => n,GotoIf($[${WAIT_COUNT} < 20]?wait_loop)
- same => n,NoOp(--- TARGET ${TARGET_EXT} DID NOT REGISTER AFTER 20S WAKEUP WAIT ---)
+ same => n,GotoIf($[${WAIT_COUNT} < 10]?wait_loop)
+ same => n,NoOp(--- TARGET ${TARGET_EXT} DID NOT REGISTER AFTER 10S ---)
  same => n,Return()
  ; Proceed to dial target
  same => n(do_dial),NoOp(--- DIALING TARGET ${TARGET_EXT} VIA ${CONTACTS} ---)
- same => n,Set(CHANNEL(hangup_handler_push)=sub-push-cancel-on-hangup,s,1(${CALL_UUID}))
+ same => n,Set(CHANNEL(hangup_handler_push)=sub-push-cancel-on-hangup,s,1(${SAFE_UUID}))
  same => n,Dial(${CONTACTS},${CALL_TIMEOUT},tT)
  same => n,Return()
 
 [sub-push-cancel-on-hangup]
 exten => s,1,NoOp(=== CHECK CANCEL PUSH FOR CALL_UUID=${ARG1}, DIALSTATUS=${DIALSTATUS} ===)
  same => n,GotoIf($["${DIALSTATUS}" = "ANSWER"]?done)
- same => n,System(/home/an-sgt/odoo19_01/push_gateway/asterisk_push_trigger.py cancel --call-uuid "${ARG1}" --reason "${DIALSTATUS}" &)
+ same => n,Set(SAFE_UUID=${FILTER(0-9a-zA-Z_.-,${ARG1})})
+ same => n,Set(SAFE_STATUS=${FILTER(0-9a-zA-Z_.-,${DIALSTATUS})})
+ same => n,System(/home/an-sgt/odoo19_01/push_gateway/asterisk_push_trigger.py cancel --call-uuid "${SAFE_UUID}" --reason "${SAFE_STATUS}" &)
  same => n(done),Return()
 
 ; ==========================================================

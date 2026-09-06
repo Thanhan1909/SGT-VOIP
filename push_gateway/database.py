@@ -1,31 +1,52 @@
-"""SQLite database layer for SGT VoIP Push Gateway."""
+"""SQLite database layer for SGT VoIP Push Gateway with minimal file permissions."""
 
 import os
 import sqlite3
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
 
-DEFAULT_DB_DIR = "/var/lib/sgt-push-gateway"
-FALLBACK_DB_DIR = os.path.dirname(os.path.abspath(__file__))
-
 
 def get_db_path() -> str:
+    # 1. Check explicit environment override
     env_path = os.getenv("GATEWAY_DB_PATH")
     if env_path:
         return env_path
 
-    if os.path.isdir(DEFAULT_DB_DIR) and os.access(DEFAULT_DB_DIR, os.W_OK):
-        return os.path.join(DEFAULT_DB_DIR, "gateway.db")
-    return os.path.join(FALLBACK_DB_DIR, "gateway.db")
+    # 2. Check systemd StateDirectory
+    state_dir = os.getenv("STATE_DIRECTORY")
+    if state_dir and os.path.isdir(state_dir) and os.access(state_dir, os.W_OK):
+        return os.path.join(state_dir, "gateway.db")
+
+    # 3. Check system standard /var/lib/sgt-push-gateway if writable
+    default_dir = "/var/lib/sgt-push-gateway"
+    if os.path.isdir(default_dir) and os.access(default_dir, os.W_OK):
+        return os.path.join(default_dir, "gateway.db")
+
+    # 4. Fallback to local push_gateway directory
+    local_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(local_dir, "gateway.db")
 
 
 def get_connection(db_path: Optional[str] = None) -> sqlite3.Connection:
     target = db_path or get_db_path()
-    os.makedirs(os.path.dirname(os.path.abspath(target)), exist_ok=True)
+    target_dir = os.path.dirname(os.path.abspath(target))
+    try:
+        os.makedirs(target_dir, mode=0o700, exist_ok=True)
+        os.chmod(target_dir, 0o700)
+    except Exception:
+        pass
+
     conn = sqlite3.connect(target, timeout=10.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA foreign_keys=ON;")
+
+    try:
+        if os.path.exists(target):
+            os.chmod(target, 0o600)
+    except Exception:
+        pass
+
     return conn
 
 
@@ -120,9 +141,36 @@ def revoke_device_token(
         return cursor.rowcount > 0
 
 
+def disable_push_token(
+    push_token: str,
+    db_path: Optional[str] = None,
+) -> int:
+    """Disable invalid or expired push token across all extensions/devices."""
+    now = datetime.now(timezone.utc).isoformat()
+    with get_connection(db_path) as conn:
+        cursor = conn.execute(
+            """
+            UPDATE voip_device_tokens
+            SET enabled=0, revoked_at=?
+            WHERE push_token=?;
+            """,
+            (now, push_token),
+        )
+        conn.commit()
+        return cursor.rowcount
+
+
+def mask_token(token: str) -> str:
+    """Redact raw token to prevent sensitive data leakage."""
+    if not token or len(token) <= 10:
+        return "***"
+    return f"{token[:6]}...{token[-4:]}"
+
+
 def get_active_tokens_for_extension(
     extension: str,
     db_path: Optional[str] = None,
+    redact_tokens: bool = False,
 ) -> List[Dict[str, Any]]:
     with get_connection(db_path) as conn:
         cursor = conn.execute(
@@ -135,7 +183,11 @@ def get_active_tokens_for_extension(
             """,
             (extension,),
         )
-        return [dict(row) for row in cursor.fetchall()]
+        rows = [dict(row) for row in cursor.fetchall()]
+        if redact_tokens:
+            for r in rows:
+                r["push_token"] = mask_token(r["push_token"])
+        return rows
 
 
 def create_or_update_call(
