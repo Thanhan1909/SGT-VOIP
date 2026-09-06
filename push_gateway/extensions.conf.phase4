@@ -1,0 +1,97 @@
+[general]
+static=yes
+writeprotect=no
+clearglobalvars=no
+
+[globals]
+
+; ==========================================================
+; SUB-ROUTINE: PUSH NOTIFICATION WAKEUP & DIAL
+; ==========================================================
+[sub-push-dial]
+exten => s,1,NoOp(=== SUB-PUSH-DIAL: CALLER=${CALLERID(num)} TO=${ARG1} TIMEOUT=${ARG2} ===)
+ same => n,Set(TARGET_EXT=${ARG1})
+ same => n,Set(CALL_TIMEOUT=${IF($["${ARG2}" != ""]?${ARG2}:30)})
+ same => n,Set(CALL_UUID=${IF($["${SIP_CALL_ID}" != ""]?${SIP_CALL_ID}:${UNIQUEID})})
+ same => n,Set(CONTACTS=${PJSIP_DIAL_CONTACTS(${TARGET_EXT})})
+ same => n,GotoIf($["${CONTACTS}" != ""]?do_dial)
+ ; Callee currently offline/asleep -> trigger VoIP push wakeup
+ same => n,NoOp(--- TARGET ${TARGET_EXT} HAS NO ACTIVE CONTACTS. TRIGGERING PUSH WAKEUP ---)
+ same => n,System(/home/an-sgt/odoo19_01/push_gateway/asterisk_push_trigger.py incoming --call-uuid "${CALL_UUID}" --caller "${CALLERID(num)}" --caller-name "${CALLERID(name)}" --callee "${TARGET_EXT}" --ttl 30 &)
+ same => n,Ringing()
+ same => n,Set(WAIT_COUNT=0)
+ same => n(wait_loop),Wait(1)
+ same => n,Set(CONTACTS=${PJSIP_DIAL_CONTACTS(${TARGET_EXT})})
+ same => n,GotoIf($["${CONTACTS}" != ""]?do_dial)
+ same => n,Set(WAIT_COUNT=$[${WAIT_COUNT} + 1])
+ same => n,GotoIf($[${WAIT_COUNT} < 20]?wait_loop)
+ same => n,NoOp(--- TARGET ${TARGET_EXT} DID NOT REGISTER AFTER 20S WAKEUP WAIT ---)
+ same => n,Return()
+ ; Proceed to dial target
+ same => n(do_dial),NoOp(--- DIALING TARGET ${TARGET_EXT} VIA ${CONTACTS} ---)
+ same => n,Set(CHANNEL(hangup_handler_push)=sub-push-cancel-on-hangup,s,1(${CALL_UUID}))
+ same => n,Dial(${CONTACTS},${CALL_TIMEOUT},tT)
+ same => n,Return()
+
+[sub-push-cancel-on-hangup]
+exten => s,1,NoOp(=== CHECK CANCEL PUSH FOR CALL_UUID=${ARG1}, DIALSTATUS=${DIALSTATUS} ===)
+ same => n,GotoIf($["${DIALSTATUS}" = "ANSWER"]?done)
+ same => n,System(/home/an-sgt/odoo19_01/push_gateway/asterisk_push_trigger.py cancel --call-uuid "${ARG1}" --reason "${DIALSTATUS}" &)
+ same => n(done),Return()
+
+; ==========================================================
+; 1. LUỒNG GỌI NỘI BỘ, HOTLINE & ĐÁ LUỒNG (201, 202, 203)
+; ==========================================================
+[from-internal]
+; 1. Nhánh test âm thanh Echo 999
+exten => 999,1,NoOp(--- TEST TONG DAI 999 ---)
+ same => n,Answer()
+ same => n,Playback(hello-world)
+ same => n,Echo()
+ same => n,Hangup()
+
+; 2. Nhánh Hotline tiếp nhận cuộc gọi từ Zalo Mini App / Web
+exten => hotline,1,NoOp(=== TIEP NHAN CUOC GOI TU ZALO MINI APP ===)
+ same => n,Set(CALLFILENAME=REC_ZALO_${STRFTIME(${EPOCH},,%Y%m%d_%H%M%S)}_${CALLERID(num)})
+ ; Bật ghi âm tự động 2 chiều
+ same => n,MixMonitor(/var/spool/asterisk/monitor/${CALLFILENAME}.wav,b)
+ ; Đổ chuông máy Sales 201 trong 20s (gắn cờ tT để cả 2 bên có quyền đá luồng)
+ same => n,Gosub(sub-push-dial,s,1(201,5))
+ ; Nếu 201 bận hoặc không nghe sau 20s -> Chuyển chuông sang Leader 202
+ same => n,GotoIf($["${DIALSTATUS}" = "ANSWER"]?finish)
+ same => n,NoOp(--- 201 KHONG NGHE -> CHUYEN SANG LEADER 202 ---)
+ same => n,Gosub(sub-push-dial,s,1(202,10))
+ same => n(finish),Hangup()
+
+; 3. Gọi nội bộ giữa máy 201 (Sales) và 202 (Leader) có hỗ trợ đá luồng
+exten => 201,1,NoOp(--- GOI DEN SALE 201 ---)
+ same => n,Set(CALLFILENAME=REC_INTERNAL_201_${STRFTIME(${EPOCH},,%Y%m%d_%H%M%S)}_${CALLERID(num)})
+ same => n,MixMonitor(/var/spool/asterisk/monitor/${CALLFILENAME}.wav,b)
+ same => n,Gosub(sub-push-dial,s,1(201,30))
+ same => n,Hangup()
+
+exten => 202,1,NoOp(--- GOI DEN LEADER 202 ---)
+ same => n,Set(CALLFILENAME=REC_INTERNAL_202_${STRFTIME(${EPOCH},,%Y%m%d_%H%M%S)}_${CALLERID(num)})
+ same => n,MixMonitor(/var/spool/asterisk/monitor/${CALLFILENAME}.wav,b)
+ same => n,Gosub(sub-push-dial,s,1(202,30))
+ same => n,Hangup()
+
+exten => 203,1,NoOp(--- GOI DEN GIAM DOC 203 ---)
+ same => n,Set(CALLFILENAME=REC_INTERNAL_203_${STRFTIME(${EPOCH},,%Y%m%d_%H%M%S)}_${CALLERID(num)})
+ same => n,MixMonitor(/var/spool/asterisk/monitor/${CALLFILENAME}.wav,b)
+ same => n,Gosub(sub-push-dial,s,1(203,30))
+ same => n,Hangup()
+
+; Bắt mọi số 20X khác
+exten => _20X,1,NoOp(--- GOI DEN ${EXTEN} ---)
+ same => n,Gosub(sub-push-dial,s,1(${EXTEN},30))
+ same => n,Hangup()
+
+; ==========================================================
+; 2. LUỒNG KHÁCH ẨN DANH (GUEST WEB/ZALO) VÀO TỔNG ĐÀI
+; ==========================================================
+[from-guest]
+exten => s,1,NoOp(--- Khach vao tu Web/Zalo WebRTC -> Chuyen vao Hotline ---)
+ same => n,Goto(from-internal,hotline,1)
+
+exten => _X.,1,Goto(from-internal,hotline,1)
