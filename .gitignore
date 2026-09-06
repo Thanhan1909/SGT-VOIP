@@ -46,3 +46,11 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Python & Push Gateway related
+push_gateway/venv/
+push_gateway/*.db
+push_gateway/*.sqlite*
+__pycache__/
+*.py[cod]
+.pytest_cache/
