@@ -5,9 +5,7 @@ import 'package:flutter/foundation.dart';
 class PushTokenManager {
   final String gatewayBaseUrl;
 
-  PushTokenManager({
-    this.gatewayBaseUrl = 'http://127.0.0.1:8085',
-  });
+  PushTokenManager({this.gatewayBaseUrl = 'http://127.0.0.1:8085'});
 
   Future<bool> registerToken({
     required String extension,
@@ -20,7 +18,8 @@ class PushTokenManager {
     if (kIsWeb) return false;
     try {
       final uri = Uri.parse('$gatewayBaseUrl/api/v1/devices/register');
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 4);
       final req = await client.postUrl(uri);
       req.headers.contentType = ContentType.json;
 
@@ -38,10 +37,14 @@ class PushTokenManager {
       client.close();
 
       if (resp.statusCode == HttpStatus.ok) {
-        debugPrint('[PushTokenManager] Token registered successfully for ext=$extension');
+        debugPrint(
+          '[PushTokenManager] Token registered successfully for ext=$extension',
+        );
         return true;
       } else {
-        debugPrint('[PushTokenManager] Failed to register token: status=${resp.statusCode}');
+        debugPrint(
+          '[PushTokenManager] Failed to register token: status=${resp.statusCode}',
+        );
         return false;
       }
     } catch (e) {
@@ -57,14 +60,12 @@ class PushTokenManager {
     if (kIsWeb) return false;
     try {
       final uri = Uri.parse('$gatewayBaseUrl/api/v1/devices/revoke');
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 3);
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 3);
       final req = await client.postUrl(uri);
       req.headers.contentType = ContentType.json;
 
-      final body = jsonEncode({
-        'extension': extension,
-        'device_id': deviceId,
-      });
+      final body = jsonEncode({'extension': extension, 'device_id': deviceId});
 
       req.write(body);
       final resp = await req.close();

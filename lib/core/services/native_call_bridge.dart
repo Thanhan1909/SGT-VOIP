@@ -23,8 +23,9 @@ abstract class NativeCallBridge {
 }
 
 class MethodChannelNativeCallBridge implements NativeCallBridge {
-  static const MethodChannel _channel =
-      MethodChannel('com.sgt.voip.softphone/native_call');
+  static const MethodChannel _channel = MethodChannel(
+    'com.sgt.voip.softphone/native_call',
+  );
 
   final StreamController<Map<String, String>> _callActionController =
       StreamController<Map<String, String>>.broadcast();
@@ -39,7 +40,9 @@ class MethodChannelNativeCallBridge implements NativeCallBridge {
     switch (call.method) {
       case 'onCallAction':
         final args = Map<String, dynamic>.from(call.arguments as Map);
-        final actionMap = args.map((k, v) => MapEntry(k.toString(), v.toString()));
+        final actionMap = args.map(
+          (k, v) => MapEntry(k.toString(), v.toString()),
+        );
         _callActionController.add(actionMap);
         break;
 
@@ -72,7 +75,9 @@ class MethodChannelNativeCallBridge implements NativeCallBridge {
       });
       return res ?? false;
     } on MissingPluginException {
-      debugPrint('[NativeCallBridge] showIncomingCall not implemented on platform');
+      debugPrint(
+        '[NativeCallBridge] showIncomingCall not implemented on platform',
+      );
       return false;
     } catch (e) {
       debugPrint('[NativeCallBridge] Error showIncomingCall: $e');
@@ -118,7 +123,8 @@ class MethodChannelNativeCallBridge implements NativeCallBridge {
   }
 
   @override
-  Stream<Map<String, String>> get callActionStream => _callActionController.stream;
+  Stream<Map<String, String>> get callActionStream =>
+      _callActionController.stream;
 
   @override
   Stream<String> get voipTokenStream => _voipTokenController.stream;

@@ -19,10 +19,7 @@ class CallCoordinator {
   bool _isNativeIncomingShown = false;
   StreamSubscription<Map<String, String>>? _callActionSub;
 
-  CallCoordinator({
-    required this.nativeCallBridge,
-    this.delegate,
-  }) {
+  CallCoordinator({required this.nativeCallBridge, this.delegate}) {
     _initBridgeListener();
   }
 
@@ -31,13 +28,17 @@ class CallCoordinator {
   bool get isNativeIncomingShown => _isNativeIncomingShown;
 
   void _initBridgeListener() {
-    _callActionSub = nativeCallBridge.callActionStream.listen(_handleCallAction);
+    _callActionSub = nativeCallBridge.callActionStream.listen(
+      _handleCallAction,
+    );
   }
 
   void _handleCallAction(Map<String, String> event) {
     final action = event['action'] ?? '';
     final callUuid = event['callUuid'] ?? '';
-    debugPrint('[CallCoordinator] Received native action: $action, callUuid: $callUuid');
+    debugPrint(
+      '[CallCoordinator] Received native action: $action, callUuid: $callUuid',
+    );
 
     switch (action) {
       case 'answer':
@@ -65,7 +66,9 @@ class CallCoordinator {
       _isNativeIncomingShown = false;
       nativeCallBridge.dismissIncomingCall(callUuid);
     } else {
-      debugPrint('[CallCoordinator] SIP call not yet arrived. Storing pending answer for $callUuid.');
+      debugPrint(
+        '[CallCoordinator] SIP call not yet arrived. Storing pending answer for $callUuid.',
+      );
       _pendingAnswerUuid = callUuid;
       _pendingAnswerTimeout?.cancel();
       _pendingAnswerTimeout = Timer(const Duration(seconds: 15), () {
@@ -100,7 +103,9 @@ class CallCoordinator {
 
     // Check if user already tapped answer from CallStyle notification or CallKit
     if (_pendingAnswerUuid != null) {
-      debugPrint('[CallCoordinator] Auto-answering incoming call $callUuid because user previously answered.');
+      debugPrint(
+        '[CallCoordinator] Auto-answering incoming call $callUuid because user previously answered.',
+      );
       _pendingAnswerUuid = null;
       _pendingAnswerTimeout?.cancel();
       _isNativeIncomingShown = false;
@@ -111,7 +116,9 @@ class CallCoordinator {
 
     // If app is not in foreground, show CallStyle notification / CallKit
     if (!isAppForeground) {
-      debugPrint('[CallCoordinator] App in background: triggering native incoming notification.');
+      debugPrint(
+        '[CallCoordinator] App in background: triggering native incoming notification.',
+      );
       nativeCallBridge.showIncomingCall(
         callUuid: callUuid,
         callerName: callerName,

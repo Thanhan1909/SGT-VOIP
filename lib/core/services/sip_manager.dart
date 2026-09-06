@@ -108,11 +108,10 @@ class SipManager extends ChangeNotifier
   final AudioManager _audioManager = AudioManager();
   CallCoordinator? _callCoordinator;
 
-  CallCoordinator get callCoordinator =>
-      _callCoordinator ??= CallCoordinator(
-        nativeCallBridge: MethodChannelNativeCallBridge(),
-        delegate: this,
-      );
+  CallCoordinator get callCoordinator => _callCoordinator ??= CallCoordinator(
+    nativeCallBridge: MethodChannelNativeCallBridge(),
+    delegate: this,
+  );
 
   @visibleForTesting
   void setCallCoordinatorForTesting(CallCoordinator? coordinator) {
@@ -1091,11 +1090,13 @@ class SipManager extends ChangeNotifier
           _audioManager.prepareForCall(call.id);
 
           final isForeground =
-              WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+              WidgetsBinding.instance.lifecycleState ==
+              AppLifecycleState.resumed;
           final callerNumber = call.remote_identity ?? '';
           final callerName = 'Extension $callerNumber';
 
-          final autoAnswered = _callCoordinator?.onIncomingCallReceived(
+          final autoAnswered =
+              _callCoordinator?.onIncomingCallReceived(
                 callUuid: call.id ?? '',
                 callerName: callerName,
                 callerNumber: callerNumber,
