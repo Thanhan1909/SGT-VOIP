@@ -6,10 +6,26 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
+import 'audio_route_adapter.dart';
+
 class AudioManager {
   static final AudioManager _instance = AudioManager._internal();
   factory AudioManager() => _instance;
   AudioManager._internal();
+
+  AudioRouteAdapter _audioRouteAdapter = const DefaultAudioRouteAdapter();
+
+  @visibleForTesting
+  void setAudioRouteAdapterForTesting(AudioRouteAdapter adapter) {
+    _audioRouteAdapter = adapter;
+  }
+
+  bool _audioPlayerEnabled = true;
+
+  @visibleForTesting
+  void setAudioPlayerEnabledForTesting(bool enabled) {
+    _audioPlayerEnabled = enabled;
+  }
 
   final AudioPlayer _ringtonePlayer = AudioPlayer();
   final AudioPlayer _ringbackPlayer = AudioPlayer();
@@ -23,36 +39,58 @@ class AudioManager {
   bool get isSpeakerOn => _isSpeakerOn;
 
   String? _activeCallId;
+  String? get activeCallId => _activeCallId;
   bool _audioRouteInitializedForCall = false;
+  bool _isMediaReady = false;
+  bool get isMediaReady => _isMediaReady;
 
-  /// Resets audio route to earpiece when preparing for a new call (incoming or outgoing).
-  Future<void> prepareForCall(String? callId) async {
-    _activeCallId = callId;
-    _audioRouteInitializedForCall = false;
-    _isSpeakerOn = false;
-    if (!kIsWeb) {
-      try {
-        await Helper.setSpeakerphoneOn(false);
-      } catch (e) {
-        debugPrint('[AudioManager] prepareForCall error: $e');
-      }
-    }
-  }
-
-  /// Ensures default audio route (earpiece) is applied exactly once per call upon ACCEPTED / CONFIRMED.
-  /// If the user has already explicitly pressed the Speakerphone button, their choice is respected.
-  Future<void> ensureDefaultAudioRoute(String? callId) async {
-    if (callId != null &&
-        _activeCallId == callId &&
-        _audioRouteInitializedForCall) {
-      // Already configured once for this call. Do not override user's manual toggle.
+  /// Resets audio state when preparing for a new call (incoming or outgoing).
+  ///
+  /// CRITICAL: Synchronously resets Dart state without invoking native audio routing.
+  /// Deduplicates calls so that calling prepareForCall multiple times for the same
+  /// [callId] is a safe no-op.
+  void prepareForCall(String? callId) {
+    if (callId != null && _activeCallId == callId) {
       return;
     }
     _activeCallId = callId;
+    _audioRouteInitializedForCall = false;
+    _isSpeakerOn = false;
+    _isMediaReady = false;
+  }
+
+  /// Updates active Call-ID without re-triggering prepareForCall.
+  void updateCallId(String? callId) {
+    if (callId != null && callId.isNotEmpty) {
+      _activeCallId = callId;
+    }
+  }
+
+  /// Ensures default audio route (earpiece) is applied safely once per call.
+  ///
+  /// Only executes once the media / audio session is active. If the user has
+  /// already explicitly pressed the Speakerphone button, their choice is respected.
+  Future<void> ensureDefaultAudioRoute(String? callId) async {
+    if (callId != null && _activeCallId != null && _activeCallId != callId) {
+      debugPrint(
+        '[AudioManager] ensureDefaultAudioRoute ignored for mismatched callId: $callId (active: $_activeCallId)',
+      );
+      return;
+    }
+    if (callId != null) {
+      _activeCallId = callId;
+    }
+    _isMediaReady = true;
+
+    if (_audioRouteInitializedForCall) {
+      // Already configured once for this call. Do not override user's manual toggle.
+      return;
+    }
     _audioRouteInitializedForCall = true;
+
     if (!_isSpeakerOn && !kIsWeb) {
       try {
-        await Helper.setSpeakerphoneOn(false);
+        await _audioRouteAdapter.setSpeakerphoneOn(false);
       } catch (e) {
         debugPrint('[AudioManager] ensureDefaultAudioRoute error: $e');
       }
@@ -60,18 +98,28 @@ class AudioManager {
   }
 
   /// Resets audio routing and stops ringtones when call ends or fails.
+  ///
+  /// Guards by [callId] so stale callbacks from previous calls cannot reset
+  /// or interrupt a newer active call.
   Future<void> resetOnCallEnded([String? callId]) async {
     if (callId != null && _activeCallId != null && _activeCallId != callId) {
+      debugPrint(
+        '[AudioManager] Ignoring resetOnCallEnded for stale callId $callId (active: $_activeCallId)',
+      );
       return;
     }
+    final wasMediaReady = _isMediaReady;
     _activeCallId = null;
     _audioRouteInitializedForCall = false;
     _isSpeakerOn = false;
+    _isMediaReady = false;
+
     await stopAll();
-    await detachRemoteStream();
-    if (!kIsWeb) {
+    await detachRemoteStream(callId);
+
+    if (!kIsWeb && wasMediaReady) {
       try {
-        await Helper.setSpeakerphoneOn(false);
+        await _audioRouteAdapter.setSpeakerphoneOn(false);
       } catch (e) {
         debugPrint('[AudioManager] resetOnCallEnded error: $e');
       }
@@ -79,7 +127,7 @@ class AudioManager {
   }
 
   Future<void> init() async {
-    if (_initialized) return;
+    if (!_audioPlayerEnabled || _initialized) return;
     _ringtoneBytes ??= _buildWav(
       frequencies: const [853, 960],
       toneSeconds: 1.2,
@@ -90,19 +138,26 @@ class AudioManager {
       toneSeconds: 1.8,
       totalSeconds: 4,
     );
-    await _ringtonePlayer.setReleaseMode(ReleaseMode.loop);
-    await _ringbackPlayer.setReleaseMode(ReleaseMode.loop);
-    _initialized = true;
-    debugPrint(
-      '[AudioManager] Initialized ringtone/ringback and audio routing',
-    );
+    try {
+      await _ringtonePlayer.setReleaseMode(ReleaseMode.loop);
+      await _ringbackPlayer.setReleaseMode(ReleaseMode.loop);
+      _initialized = true;
+      debugPrint(
+        '[AudioManager] Initialized ringtone/ringback and audio routing',
+      );
+    } catch (e) {
+      debugPrint('[AudioManager] AudioPlayer init warning: $e');
+    }
   }
 
   Future<void> playRingtone() async {
+    if (!_audioPlayerEnabled) return;
     try {
       await init();
       await _ringbackPlayer.stop();
-      await HapticFeedback.vibrate();
+      try {
+        await HapticFeedback.vibrate();
+      } catch (_) {}
       final bytes = _ringtoneBytes;
       if (bytes != null) {
         await _ringtonePlayer.play(BytesSource(bytes));
@@ -112,9 +167,15 @@ class AudioManager {
     }
   }
 
-  Future<void> stopRingtone() => _ringtonePlayer.stop();
+  Future<void> stopRingtone() async {
+    if (!_audioPlayerEnabled) return;
+    try {
+      await _ringtonePlayer.stop();
+    } catch (_) {}
+  }
 
   Future<void> playRingback() async {
+    if (!_audioPlayerEnabled) return;
     try {
       await init();
       await _ringtonePlayer.stop();
@@ -127,18 +188,29 @@ class AudioManager {
     }
   }
 
-  Future<void> stopRingback() => _ringbackPlayer.stop();
+  Future<void> stopRingback() async {
+    if (!_audioPlayerEnabled) return;
+    try {
+      await _ringbackPlayer.stop();
+    } catch (_) {}
+  }
 
   Future<void> stopAll() async {
-    await Future.wait([_ringtonePlayer.stop(), _ringbackPlayer.stop()]);
+    if (!_audioPlayerEnabled) return;
+    try {
+      await Future.wait([_ringtonePlayer.stop(), _ringbackPlayer.stop()]);
+    } catch (_) {}
   }
 
   /// Attaches the remote WebRTC stream to a renderer.
-  ///
-  /// On Flutter web, assigning [RTCVideoRenderer.srcObject] creates the hidden
-  /// HTML audio element that actually consumes and plays remote audio. Merely
-  /// receiving an enabled audio track is not enough to produce sound.
-  Future<void> attachRemoteStream(MediaStream stream) async {
+  Future<void> attachRemoteStream(MediaStream stream, [String? callId]) async {
+    if (callId != null && _activeCallId != null && _activeCallId != callId) {
+      debugPrint(
+        '[AudioManager] Rejecting attachRemoteStream: callId mismatch ($callId vs $_activeCallId)',
+      );
+      return;
+    }
+    _isMediaReady = true;
     try {
       final renderer = _remoteAudioRenderer ??= RTCVideoRenderer();
       if (!_remoteAudioRendererInitialized) {
@@ -158,7 +230,13 @@ class AudioManager {
     }
   }
 
-  Future<void> detachRemoteStream() async {
+  Future<void> detachRemoteStream([String? callId]) async {
+    if (callId != null && _activeCallId != null && _activeCallId != callId) {
+      debugPrint(
+        '[AudioManager] Rejecting detachRemoteStream: callId mismatch ($callId vs $_activeCallId)',
+      );
+      return;
+    }
     try {
       _remoteAudioRenderer?.srcObject = null;
       debugPrint('[AudioManager] Remote WebRTC stream detached');
@@ -167,26 +245,44 @@ class AudioManager {
     }
   }
 
-  Future<void> setSpeakerphone(bool enabled) async {
+  /// Toggles speakerphone with Call-ID validation and media readiness check.
+  ///
+  /// Returns [true] if and only if the native audio route was successfully changed.
+  Future<bool> setSpeakerphone(bool enabled, {String? callId}) async {
+    if (callId != null && _activeCallId != null && _activeCallId != callId) {
+      debugPrint(
+        '[AudioManager] Rejecting setSpeakerphone: callId mismatch ($callId vs $_activeCallId)',
+      );
+      return false;
+    }
+    if (!_isMediaReady) {
+      debugPrint(
+        '[AudioManager] setSpeakerphone rejected: media session is not ready yet',
+      );
+      return false;
+    }
     try {
+      if (!kIsWeb) {
+        await _audioRouteAdapter.setSpeakerphoneOn(enabled);
+      }
       _isSpeakerOn = enabled;
       _audioRouteInitializedForCall = true;
-      if (!kIsWeb) {
-        await Helper.setSpeakerphoneOn(enabled);
-      }
+      return true;
     } catch (error) {
       debugPrint('[AudioManager] setSpeakerphone error: $error');
+      return false;
     }
   }
 
-  Future<void> toggleSpeakerphone() async {
-    await setSpeakerphone(!_isSpeakerOn);
+  Future<bool> toggleSpeakerphone({String? callId}) async {
+    return await setSpeakerphone(!_isSpeakerOn, callId: callId);
   }
 
   void resetState() {
     _activeCallId = null;
     _audioRouteInitializedForCall = false;
     _isSpeakerOn = false;
+    _isMediaReady = false;
   }
 
   @visibleForTesting

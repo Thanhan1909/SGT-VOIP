@@ -562,8 +562,8 @@ class SipManager extends ChangeNotifier
       callOptions['mediaConstraints'] = mediaConstraints;
       _applyIceTransportPolicy(callOptions);
 
-      // Pre-configure earpiece default for outgoing call
-      unawaited(_audioManager.prepareForCall(cleanNumber));
+      // Pre-configure audio manager state for outgoing call
+      _audioManager.prepareForCall(cleanNumber);
 
       _log('CALL_HELPER', 'Calling _helper.call for $cleanNumber...');
       final started = await _helper.call(
@@ -617,8 +617,8 @@ class SipManager extends ChangeNotifier
             }
           }
         }
-        unawaited(_audioManager.stopAll());
-        unawaited(_audioManager.ensureDefaultAudioRoute(call.id));
+        await _audioManager.stopAll();
+        await _audioManager.ensureDefaultAudioRoute(call.id);
         _log('TIMING', 'Answering call id=${call.id}...');
         final answerOptions = _helper.buildCallOptions(true);
         _applyIceTransportPolicy(answerOptions);
@@ -638,10 +638,10 @@ class SipManager extends ChangeNotifier
     final callId = _currentCall?.id;
     if (callId != null) {
       _logCallTiming(callId, 'HANGUP_CLICK');
-      unawaited(_audioManager.resetOnCallEnded(callId));
+      _audioManager.resetOnCallEnded(callId);
     }
     _audioManager.stopAll();
-    unawaited(_audioManager.detachRemoteStream());
+    _audioManager.detachRemoteStream(callId);
     _stopCallTimer();
     _stopWebRtcStatsCollection();
     _callDurationSeconds = 0;
@@ -678,9 +678,14 @@ class SipManager extends ChangeNotifier
     notifyListeners();
   }
 
-  void toggleSpeaker() {
-    _audioManager.toggleSpeakerphone();
-    notifyListeners();
+  Future<bool> toggleSpeaker() async {
+    final success = await _audioManager.toggleSpeakerphone(
+      callId: _currentCall?.id,
+    );
+    if (success) {
+      notifyListeners();
+    }
+    return success;
   }
 
   void sendDTMF(String tone) {
@@ -1051,22 +1056,21 @@ class SipManager extends ChangeNotifier
         _stopCallTimer();
         _resetWebRtcDiagnostics();
         _callDurationSeconds = 0;
-        unawaited(_audioManager.prepareForCall(call.id));
-
         if (call.direction.toUpperCase() == 'INCOMING') {
           _log(
             'CALL_INITIATION',
             '>>> INCOMING INVITE received! Starting ringtone and navigating to incoming call screen.',
           );
-          _logCallTiming(call.id, 'CALL_INITIATION_INCOMING');
-          unawaited(_audioManager.playRingtone());
+          _audioManager.prepareForCall(call.id);
           _navigateToIncomingCall();
+          _audioManager.playRingtone();
         } else {
           _log(
             'CALL_INITIATION',
             '>>> OUTGOING call initiated (id=${call.id}). Navigating to in-call screen.',
           );
           _logCallTiming(call.id, 'CALL_INITIATION_OUTGOING');
+          _audioManager.updateCallId(call.id);
           _navigateToInCall();
         }
         break;
@@ -1087,7 +1091,7 @@ class SipManager extends ChangeNotifier
         if (state.originator?.toLowerCase() == 'remote' &&
             state.stream != null &&
             audioTracks.isNotEmpty) {
-          unawaited(_audioManager.attachRemoteStream(state.stream!));
+          _audioManager.attachRemoteStream(state.stream!, call.id);
         }
         break;
 
@@ -1097,9 +1101,9 @@ class SipManager extends ChangeNotifier
           'Call is PROGRESS (180/183 Ringing), origin=${call.direction}',
         );
         _logCallTiming(call.id, 'PROGRESS');
-        unawaited(_audioManager.ensureDefaultAudioRoute(call.id));
+        _audioManager.ensureDefaultAudioRoute(call.id);
         if (call.direction.toUpperCase() == 'OUTGOING') {
-          unawaited(_audioManager.playRingback());
+          _audioManager.playRingback();
           _navigateToInCall();
         }
         _startWebRtcStatsCollection();
@@ -1108,8 +1112,8 @@ class SipManager extends ChangeNotifier
       case CallStateEnum.ACCEPTED:
         _log('TIMING', '>>> Call ACCEPTED (200 OK received/sent)');
         _logCallTiming(call.id, 'ACCEPTED');
-        unawaited(_audioManager.stopAll());
-        unawaited(_audioManager.ensureDefaultAudioRoute(call.id));
+        _audioManager.ensureDefaultAudioRoute(call.id);
+        _audioManager.stopAll();
         _startCallTimer();
         _startWebRtcStatsCollection();
         _navigateToInCall();
@@ -1118,8 +1122,8 @@ class SipManager extends ChangeNotifier
       case CallStateEnum.CONFIRMED:
         _log('TIMING', '>>> Call CONFIRMED (ACK received/dialog established)');
         _logCallTiming(call.id, 'CONFIRMED');
-        unawaited(_audioManager.stopAll());
-        unawaited(_audioManager.ensureDefaultAudioRoute(call.id));
+        _audioManager.ensureDefaultAudioRoute(call.id);
+        _audioManager.stopAll();
         _startCallTimer();
         _startWebRtcStatsCollection();
         _navigateToInCall();
@@ -1156,13 +1160,13 @@ class SipManager extends ChangeNotifier
         );
         _isDialing = false;
         _pendingTargetNumber = null;
-        unawaited(_audioManager.resetOnCallEnded(call.id));
         _stopCallTimer();
         _stopWebRtcStatsCollection();
         _callDurationSeconds = 0;
         _currentCall = null;
         _callState = null;
         _navigateBackToDialpad();
+        _audioManager.resetOnCallEnded(call.id);
         break;
 
       default:

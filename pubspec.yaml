@@ -13,7 +13,8 @@ dependencies:
 
   # WebRTC & SIP Core
   sip_ua: 0.6.0
-  flutter_webrtc: 0.12.12+hotfix.1
+  flutter_webrtc:
+    path: packages/flutter_webrtc
 
   # Storage & Permissions
   shared_preferences: ^2.2.2
@@ -27,7 +28,8 @@ dependencies:
   intl: any
 
 dependency_overrides:
-  flutter_webrtc: 0.12.12+hotfix.1
+  flutter_webrtc:
+    path: packages/flutter_webrtc
   sip_ua: 0.6.0
 
 dev_dependencies:

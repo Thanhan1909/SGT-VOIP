@@ -13,6 +13,7 @@ import 'package:sip_ua/src/map_helper.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import 'package:flutter_sip_softphone/core/services/sip_manager.dart';
+import 'package:flutter_sip_softphone/core/services/audio_manager.dart';
 import 'package:flutter_sip_softphone/data/models/sip_account.dart';
 import 'package:flutter_sip_softphone/presentation/screens/in_call_screen.dart';
 import 'package:flutter_sip_softphone/presentation/screens/dialpad_screen.dart';
@@ -172,6 +173,20 @@ void main() {
           const MethodChannel('FlutterWebRTC/audio'),
           (MethodCall methodCall) async => true,
         );
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('FlutterWebRTC.Method'),
+          (MethodCall methodCall) async => true,
+        );
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          SystemChannels.platform,
+          (MethodCall methodCall) async => null,
+        );
+
+    AudioManager().setAudioPlayerEnabledForTesting(false);
   });
 
   tearDown(() {
@@ -709,15 +724,15 @@ void main() {
         expect(sip.isSpeakerOn, isFalse);
 
         // Người dùng bấm bật loa ngoài
-        sip.toggleSpeaker();
+        await sip.toggleSpeaker();
         expect(sip.isSpeakerOn, isTrue);
 
         // Người dùng bấm tắt loa ngoài
-        sip.toggleSpeaker();
+        await sip.toggleSpeaker();
         expect(sip.isSpeakerOn, isFalse);
 
         // Bật lại rồi kết thúc cuộc gọi
-        sip.toggleSpeaker();
+        await sip.toggleSpeaker();
         expect(sip.isSpeakerOn, isTrue);
 
         sip.callStateChanged(fakeCall, CallState(CallStateEnum.ENDED));

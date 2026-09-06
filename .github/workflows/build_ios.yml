@@ -176,9 +176,24 @@ jobs:
           echo "$archive_contents" | grep -F "Payload/Runner.app/Runner" || { echo "Missing Payload/Runner.app/Runner"; exit 1; }
           echo "$archive_contents" | grep -F "Payload/Runner.app/Frameworks/" || { echo "Missing Payload/Runner.app/Frameworks/"; exit 1; }
 
-      - name: Upload unsigned IPA artifact
+      - name: Package dSYM symbols for crash symbolication
+        run: |
+          mkdir -p build/ios/dSYMs
+          find build/ios/iphoneos -maxdepth 1 -name "*.dSYM" -exec cp -R {} build/ios/dSYMs/ \; || true
+          cd build/ios
+          zip -r dSYMs.zip dSYMs/
+          cd ../..
+
+      - name: Upload unsigned IPA artifact (Testing / Sideloadly only)
         uses: actions/upload-artifact@v4
         with:
           name: SGTSoftphone-iOS-Unsigned-IPA-for-Sideloadly
           path: build/ios/ipa/SGTSoftphone-unsigned.ipa
+          retention-days: 14
+
+      - name: Upload dSYM symbols artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SGTSoftphone-iOS-dSYM-Symbols
+          path: build/ios/dSYMs.zip
           retention-days: 14
