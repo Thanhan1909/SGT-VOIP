@@ -18,29 +18,43 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="SGT VoIP Softphone PWA with Web Push for iOS and Web">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="flutter_sip_softphone">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SGT VoIP">
+  <meta name="theme-color" content="#0175C2">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>flutter_sip_softphone</title>
+  <title>SGT VoIP Softphone</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Web Push Helper -->
+  <script src="web_push_helper.js"></script>
+
+  <script>
+    // Register custom Web Push Service Worker for PWA
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        const baseHref = document.querySelector('base') ? document.querySelector('base').getAttribute('href') : '/softphone/';
+        navigator.serviceWorker.register('sw.js', { scope: baseHref })
+          .then(function(registration) {
+            console.log('[PWA] Service Worker registered with scope:', registration.scope);
+          })
+          .catch(function(error) {
+            console.warn('[PWA] Service Worker registration failed:', error);
+          });
+      });
+    }
+  </script>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
-
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

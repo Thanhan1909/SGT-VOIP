@@ -34,7 +34,7 @@ if ! asterisk -rx "dialplan reload" >/dev/null; then
 fi
 
 echo "[DIALPLAN] Validating dialplan contexts..."
-if ! asterisk -rx "dialplan show sub-push-dial" | grep -q "sub-push-dial"; then
+if ! (asterisk -rx "dialplan show sub-push-dial" | grep -q "sub-push-dial"); then
     echo "[ERROR] Context sub-push-dial not found after reload. Rolling back..."
     if [ -f "$BACKUP_FILE" ]; then
         cp "$BACKUP_FILE" "$TARGET_DIALPLAN"
@@ -43,7 +43,7 @@ if ! asterisk -rx "dialplan show sub-push-dial" | grep -q "sub-push-dial"; then
     exit 1
 fi
 
-if ! asterisk -rx "dialplan show sub-push-cancel-on-hangup" | grep -q "sub-push-cancel-on-hangup"; then
+if ! (asterisk -rx "dialplan show sub-push-cancel-on-hangup" | grep -q "sub-push-cancel-on-hangup"); then
     echo "[ERROR] Context sub-push-cancel-on-hangup not found after reload. Rolling back..."
     if [ -f "$BACKUP_FILE" ]; then
         cp "$BACKUP_FILE" "$TARGET_DIALPLAN"

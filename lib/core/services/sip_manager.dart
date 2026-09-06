@@ -230,6 +230,8 @@ class SipManager extends ChangeNotifier
   bool _isOnHold = false;
   int _callDurationSeconds = 0;
   Timer? _callTimer;
+  Timer? _incomingRingingTimer;
+  String? _activeRingingCallUuid;
   Timer? _reconnectTimer;
   int _reconnectAttempts = 0;
   static const int _maxReconnectAttempts = 3;
@@ -451,6 +453,19 @@ class SipManager extends ChangeNotifier
     }
   }
 
+  Future<void> connectWithAccount(
+    SipAccount newAccount, {
+    bool persist = true,
+  }) async {
+    _account = newAccount;
+    _reconnectAttempts = 0;
+    _hasTerminalAuthError = false;
+    if (persist && !kIsWeb) {
+      await _account!.saveToPrefs();
+    }
+    await register(newAccount: null, resetAttempts: true);
+  }
+
   Future<void> register({
     SipAccount? newAccount,
     bool resetAttempts = false,
@@ -459,7 +474,9 @@ class SipManager extends ChangeNotifier
       _account = newAccount;
       _reconnectAttempts = 0;
       _hasTerminalAuthError = false;
-      await _account!.saveToPrefs();
+      if (!kIsWeb) {
+        await _account!.saveToPrefs();
+      }
     } else if (resetAttempts) {
       _reconnectAttempts = 0;
       _hasTerminalAuthError = false;
@@ -762,6 +779,7 @@ class SipManager extends ChangeNotifier
 
   @override
   Future<void> answerCall() async {
+    _cancelIncomingRingingTimer('user_answered');
     final call = _currentCall;
     if (call != null) {
       try {
@@ -796,6 +814,7 @@ class SipManager extends ChangeNotifier
 
   @override
   void hangupCall() {
+    _cancelIncomingRingingTimer('hangupCall');
     _isDialing = false;
     _pendingTargetNumber = null;
     final callId = _currentCall?.id;
@@ -895,6 +914,36 @@ class SipManager extends ChangeNotifier
   }
 
   // ── Call Timer Helpers ───────────────────────────────────────────────────
+
+  void _cancelIncomingRingingTimer([String reason = '']) {
+    if (_incomingRingingTimer != null) {
+      _log(
+        'CALL_TIMER',
+        'Cancelling incoming ringing timer (reason: $reason, callUuid: $_activeRingingCallUuid)',
+      );
+      _incomingRingingTimer?.cancel();
+      _incomingRingingTimer = null;
+    }
+    _activeRingingCallUuid = null;
+  }
+
+  void _onIncomingCallTimeout(Call call, String callUuid) {
+    _log(
+      'CALL_TIMEOUT',
+      'Incoming call ringing timeout (45s) for callUuid: $callUuid',
+    );
+    _cancelIncomingRingingTimer('timeout_45s');
+
+    if (_currentCall?.id == call.id) {
+      _callHistoryService.recordCallEnded(
+        correlationId: callUuid,
+        wasAnswered: false,
+        wasDeclinedByUser: false,
+        cause: 'Ringing Timeout (45s)',
+      );
+      hangupCall();
+    }
+  }
 
   void _startCallTimer() {
     if (_callTimer != null && _callTimer!.isActive) {
@@ -1238,9 +1287,15 @@ class SipManager extends ChangeNotifier
         );
 
         if (isIncoming) {
+          _cancelIncomingRingingTimer('new_incoming_call');
+          _activeRingingCallUuid = effectiveCallUuid;
+          _incomingRingingTimer = Timer(const Duration(seconds: 45), () {
+            _onIncomingCallTimeout(call, effectiveCallUuid);
+          });
+
           _log(
             'CALL_INITIATION',
-            '>>> INCOMING INVITE received! Starting ringtone and navigating to incoming call screen.',
+            '>>> INCOMING INVITE received! Starting 45s ringing timer and navigating to incoming call screen.',
           );
           _audioManager.prepareForCall(call.id);
 
@@ -1307,6 +1362,7 @@ class SipManager extends ChangeNotifier
         break;
 
       case CallStateEnum.ACCEPTED:
+        _cancelIncomingRingingTimer('call_accepted');
         _log('TIMING', '>>> Call ACCEPTED (200 OK received/sent)');
         _logCallTiming(call.id, 'ACCEPTED');
         final effectiveCallUuid = _resolveCallUuid(call);
@@ -1321,6 +1377,7 @@ class SipManager extends ChangeNotifier
         break;
 
       case CallStateEnum.CONFIRMED:
+        _cancelIncomingRingingTimer('call_confirmed');
         _log('TIMING', '>>> Call CONFIRMED (ACK received/dialog established)');
         _logCallTiming(call.id, 'CONFIRMED');
         final effectiveCallUuid = _resolveCallUuid(call);
@@ -1355,6 +1412,7 @@ class SipManager extends ChangeNotifier
 
       case CallStateEnum.ENDED:
       case CallStateEnum.FAILED:
+        _cancelIncomingRingingTimer('call_ended_or_failed');
         _log(
           'TIMING',
           '>>> Call ${state.state} (origin=${call.direction}, cause=${state.cause})',
@@ -1586,6 +1644,9 @@ class SipManager extends ChangeNotifier
     _isDiagnosticUiActive = false;
     _callTimer?.cancel();
     _callTimer = null;
+    _incomingRingingTimer?.cancel();
+    _incomingRingingTimer = null;
+    _activeRingingCallUuid = null;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
     _statsTimer?.cancel();
@@ -1593,6 +1654,9 @@ class SipManager extends ChangeNotifier
     _audioManager.resetState();
     _callStopwatches.clear();
   }
+
+  @visibleForTesting
+  Timer? get incomingRingingTimerForTesting => _incomingRingingTimer;
 
   @visibleForTesting
   void setReconnectAttemptsForTesting(int attempts) {
@@ -1625,6 +1689,7 @@ class SipManager extends ChangeNotifier
 
   @override
   void dispose() {
+    _cancelIncomingRingingTimer('dispose');
     WidgetsBinding.instance.removeObserver(this);
     _audioSessionSub?.cancel();
     _voipTokenSub?.cancel();

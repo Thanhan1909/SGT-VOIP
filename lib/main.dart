@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'core/constants/app_constants.dart';
 import 'core/services/sip_manager.dart';
 import 'presentation/screens/app_shell.dart';
+import 'presentation/screens/call_landing_screen.dart';
 import 'presentation/screens/dialpad_screen.dart';
 import 'presentation/screens/in_call_screen.dart';
 import 'presentation/screens/incoming_call_screen.dart';
@@ -79,6 +80,20 @@ class SGTSoftphoneApp extends StatelessWidget {
         ),
       ),
       initialRoute: '/',
+      onGenerateRoute: (settings) {
+        final uri = Uri.tryParse(settings.name ?? '');
+        if (uri != null) {
+          final segments = uri.pathSegments;
+          if (segments.length >= 2 && segments[0] == 'calls') {
+            final callUuid = segments[1];
+            return MaterialPageRoute(
+              builder: (context) => CallLandingScreen(callUuid: callUuid),
+              settings: settings,
+            );
+          }
+        }
+        return null;
+      },
       routes: {
         '/': (context) => const AppShell(),
         '/in_call': (context) => const InCallScreen(),

@@ -96,203 +96,236 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                       child: IntrinsicHeight(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 24.0,
-                            vertical: 24.0,
+                            horizontal: 20.0,
+                            vertical: 20.0,
                           ),
                           child: Column(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const SizedBox(height: 24),
+                              Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const SizedBox(height: 16),
 
-                              const Text(
-                                'CUỘC GỌI ĐẾN',
-                                style: TextStyle(
-                                  color: AppConstants.accentGreen,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 2,
-                                ),
-                              ),
-
-                              const Spacer(flex: 1),
-
-                              // Pulsing Avatar Ring Animation
-                              AnimatedBuilder(
-                                animation: _animController,
-                                builder: (context, child) {
-                                  return Container(
-                                    padding: EdgeInsets.all(
-                                      18.0 * _animController.value,
+                                  const Text(
+                                    'CUỘC GỌI ĐẾN',
+                                    style: TextStyle(
+                                      color: AppConstants.accentGreen,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 2,
                                     ),
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: AppConstants.accentGreen
-                                          .withValues(
-                                            alpha: 0.15 * _animController.value,
-                                          ),
-                                    ),
-                                    child: Container(
-                                      width: 124,
-                                      height: 124,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: AppConstants.surfaceLight,
-                                        border: Border.all(
-                                          color: AppConstants.accentGreen,
-                                          width: 2.5,
+                                  ),
+
+                                  const SizedBox(height: 24),
+
+                                  // Pulsing Avatar Ring Animation
+                                  AnimatedBuilder(
+                                    animation: _animController,
+                                    builder: (context, child) {
+                                      return Container(
+                                        padding: EdgeInsets.all(
+                                          18.0 * _animController.value,
                                         ),
-                                        boxShadow: const [
-                                          BoxShadow(
-                                            color: Color(0x3321A366),
-                                            blurRadius: 24,
-                                            spreadRadius: 6,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: AppConstants.accentGreen
+                                              .withValues(
+                                                alpha:
+                                                    0.15 *
+                                                    _animController.value,
+                                              ),
+                                        ),
+                                        child: Container(
+                                          width: 120,
+                                          height: 120,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: AppConstants.surfaceLight,
+                                            border: Border.all(
+                                              color: AppConstants.accentGreen,
+                                              width: 2.5,
+                                            ),
+                                            boxShadow: const [
+                                              BoxShadow(
+                                                color: Color(0x3321A366),
+                                                blurRadius: 24,
+                                                spreadRadius: 6,
+                                              ),
+                                            ],
                                           ),
-                                        ],
-                                      ),
-                                      child: const Icon(
-                                        Icons.phone_in_talk,
-                                        size: 56,
-                                        color: AppConstants.accentGreen,
+                                          child: const Icon(
+                                            Icons.phone_in_talk,
+                                            size: 54,
+                                            color: AppConstants.accentGreen,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+
+                                  const SizedBox(height: 20),
+
+                                  // Caller Display Name & Number
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12.0,
+                                    ),
+                                    child: Text(
+                                      callerId,
+                                      textAlign: TextAlign.center,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      softWrap: true,
+                                      style: const TextStyle(
+                                        color: AppConstants.textPrimary,
+                                        fontSize: 26,
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
-                                  );
-                                },
+                                  ),
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    'Đang đổ chuông…',
+                                    style: TextStyle(
+                                      color: AppConstants.textSecondary,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
                               ),
 
                               const SizedBox(height: 24),
-
-                              // Caller Display Name & Number
-                              Text(
-                                callerId,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  color: AppConstants.textPrimary,
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                'Đang đổ chuông…',
-                                style: TextStyle(
-                                  color: AppConstants.textSecondary,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-
-                              const Spacer(flex: 2),
 
                               // Accept (Green) and Decline (Red) Action Buttons
                               Padding(
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 32.0,
+                                  horizontal: 16.0,
                                 ),
                                 child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     // Decline Button
-                                    Column(
-                                      children: [
-                                        Semantics(
-                                          button: true,
-                                          label: 'Từ chối cuộc gọi',
-                                          child: Material(
-                                            color: Colors.transparent,
-                                            child: InkWell(
-                                              onTap: () {
-                                                sip.hangupCall();
-                                                _popBack();
-                                              },
-                                              borderRadius:
-                                                  BorderRadius.circular(34),
-                                              child: Container(
-                                                width: 68,
-                                                height: 68,
-                                                decoration: const BoxDecoration(
-                                                  color: AppConstants.accentRed,
-                                                  shape: BoxShape.circle,
-                                                  boxShadow: [
-                                                    BoxShadow(
-                                                      color: Color(0x4DE5484D),
-                                                      blurRadius: 16,
-                                                      spreadRadius: 4,
-                                                    ),
-                                                  ],
-                                                ),
-                                                child: const Icon(
-                                                  Icons.call_end,
-                                                  color: Colors.white,
-                                                  size: 32,
+                                    Expanded(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Semantics(
+                                            button: true,
+                                            label: 'Từ chối cuộc gọi',
+                                            child: Material(
+                                              color: Colors.transparent,
+                                              child: InkWell(
+                                                onTap: () {
+                                                  sip.hangupCall();
+                                                  _popBack();
+                                                },
+                                                borderRadius:
+                                                    BorderRadius.circular(34),
+                                                child: Container(
+                                                  width: 68,
+                                                  height: 68,
+                                                  decoration:
+                                                      const BoxDecoration(
+                                                        color: AppConstants
+                                                            .accentRed,
+                                                        shape: BoxShape.circle,
+                                                        boxShadow: [
+                                                          BoxShadow(
+                                                            color: Color(
+                                                              0x4DE5484D,
+                                                            ),
+                                                            blurRadius: 16,
+                                                            spreadRadius: 4,
+                                                          ),
+                                                        ],
+                                                      ),
+                                                  child: const Icon(
+                                                    Icons.call_end,
+                                                    color: Colors.white,
+                                                    size: 32,
+                                                  ),
                                                 ),
                                               ),
                                             ),
                                           ),
-                                        ),
-                                        const SizedBox(height: 10),
-                                        const Text(
-                                          'Từ chối',
-                                          style: TextStyle(
-                                            color: AppConstants.textPrimary,
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 14,
+                                          const SizedBox(height: 10),
+                                          const FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            child: Text(
+                                              'Từ chối',
+                                              style: TextStyle(
+                                                color: AppConstants.textPrimary,
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 14,
+                                              ),
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
 
                                     // Accept Button
-                                    Column(
-                                      children: [
-                                        Semantics(
-                                          button: true,
-                                          label: 'Trả lời cuộc gọi',
-                                          child: Material(
-                                            color: Colors.transparent,
-                                            child: InkWell(
-                                              onTap: () => sip.answerCall(),
-                                              borderRadius:
-                                                  BorderRadius.circular(34),
-                                              child: Container(
-                                                width: 68,
-                                                height: 68,
-                                                decoration: const BoxDecoration(
-                                                  color:
-                                                      AppConstants.accentGreen,
-                                                  shape: BoxShape.circle,
-                                                  boxShadow: [
-                                                    BoxShadow(
-                                                      color: Color(0x4D21A366),
-                                                      blurRadius: 16,
-                                                      spreadRadius: 4,
-                                                    ),
-                                                  ],
-                                                ),
-                                                child: const Icon(
-                                                  Icons.phone,
-                                                  color: Colors.white,
-                                                  size: 32,
+                                    Expanded(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Semantics(
+                                            button: true,
+                                            label: 'Trả lời cuộc gọi',
+                                            child: Material(
+                                              color: Colors.transparent,
+                                              child: InkWell(
+                                                onTap: () => sip.answerCall(),
+                                                borderRadius:
+                                                    BorderRadius.circular(34),
+                                                child: Container(
+                                                  width: 68,
+                                                  height: 68,
+                                                  decoration:
+                                                      const BoxDecoration(
+                                                        color: AppConstants
+                                                            .accentGreen,
+                                                        shape: BoxShape.circle,
+                                                        boxShadow: [
+                                                          BoxShadow(
+                                                            color: Color(
+                                                              0x4D21A366,
+                                                            ),
+                                                            blurRadius: 16,
+                                                            spreadRadius: 4,
+                                                          ),
+                                                        ],
+                                                      ),
+                                                  child: const Icon(
+                                                    Icons.phone,
+                                                    color: Colors.white,
+                                                    size: 32,
+                                                  ),
                                                 ),
                                               ),
                                             ),
                                           ),
-                                        ),
-                                        const SizedBox(height: 10),
-                                        const Text(
-                                          'Trả lời',
-                                          style: TextStyle(
-                                            color: AppConstants.textPrimary,
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 14,
+                                          const SizedBox(height: 10),
+                                          const FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            child: Text(
+                                              'Trả lời',
+                                              style: TextStyle(
+                                                color: AppConstants.textPrimary,
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 14,
+                                              ),
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
                                   ],
                                 ),
                               ),
 
-                              const Spacer(flex: 1),
+                              const SizedBox(height: 16),
                             ],
                           ),
                         ),

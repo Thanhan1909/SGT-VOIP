@@ -62,8 +62,7 @@ class SipAccount {
     final secureTurnPass = await SecureStorageService.getTurnPassword() ?? '';
 
     return SipAccount(
-      wssUri:
-          prefs.getString(AppConstants.keyWssUri) ?? AppConstants.defaultWssUri,
+      wssUri: await _getAndMigrateWssUri(prefs),
       domain:
           prefs.getString(AppConstants.keyDomain) ?? AppConstants.defaultDomain,
       extension:
@@ -88,6 +87,23 @@ class SipAccount {
       diagnosticLogging:
           prefs.getBool(AppConstants.keyDiagnosticLogging) ?? false,
     );
+  }
+
+  static Future<String> _getAndMigrateWssUri(SharedPreferences prefs) async {
+    final rawWss = prefs.getString(AppConstants.keyWssUri);
+    // Tự chuyển sang endpoint mới nếu giá trị cũ trống hoặc thuộc *.trycloudflare.com
+    if (rawWss == null ||
+        rawWss.trim().isEmpty ||
+        rawWss.contains('.trycloudflare.com')) {
+      const newWss = AppConstants.defaultWssUri;
+      if (rawWss != null &&
+          (rawWss.trim().isEmpty || rawWss.contains('.trycloudflare.com'))) {
+        await prefs.setString(AppConstants.keyWssUri, newWss);
+      }
+      return newWss;
+    }
+    // Không ghi đè một WSS custom hợp lệ do người dùng chủ động cấu hình
+    return rawWss;
   }
 
   static Future<int> _getAndMigrateIceGatheringTimeout(

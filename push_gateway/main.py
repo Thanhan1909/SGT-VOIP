@@ -15,14 +15,20 @@ from database import (
     upsert_device_token,
     revoke_device_token,
     get_active_tokens_for_extension,
+    upsert_web_push_subscription,
+    revoke_web_push_subscription,
+    get_active_web_push_subscriptions,
     create_or_update_call,
     update_call_status,
     get_call,
     mask_token,
+    mask_endpoint,
 )
 from models import (
     DeviceRegisterRequest,
     DeviceRevokeRequest,
+    WebPushSubscribeRequest,
+    WebPushUnsubscribeRequest,
     IncomingPushRequest,
     CancelPushRequest,
     CallEventRequest,
@@ -176,6 +182,17 @@ async def health_check():
     )
 
 
+@app.get("/api/v1/webpush/vapid-public-key", response_model=ApiResponse)
+async def get_vapid_public_key():
+    """Retrieve the application server VAPID public key for Web Push."""
+    key = push_sender.vapid_public_key
+    return ApiResponse(
+        success=bool(key),
+        message="VAPID public key retrieved" if key else "VAPID public key not configured",
+        data={"public_key": key},
+    )
+
+
 # =========================================================================
 # Device Registration Endpoints (Protected by Device Auth)
 # =========================================================================
@@ -242,7 +259,7 @@ async def get_extension_tokens(extension: str):
 
 @app.post("/api/v1/internal/push/incoming", response_model=ApiResponse, dependencies=[Depends(verify_internal_auth)])
 async def trigger_incoming_push(req: IncomingPushRequest):
-    """Trigger incoming call push notification (called by Asterisk dialplan / AGI)."""
+    """Trigger incoming call push notification across mobile (FCM/APNs) and Web Push."""
     logger.info(
         f"Incoming call push request: call_uuid={req.call_uuid}, from={req.caller_extension} to={req.callee_extension}"
     )
@@ -258,18 +275,24 @@ async def trigger_incoming_push(req: IncomingPushRequest):
         ttl_seconds=req.ttl_seconds,
     )
 
-    # 2. Look up active device tokens for callee
+    # 2. Look up active mobile device tokens (FCM/APNs)
     tokens = get_active_tokens_for_extension(req.callee_extension, redact_tokens=False)
-    if not tokens:
-        logger.warning(f"No active device tokens found for callee extension {req.callee_extension}")
+
+    # 3. Look up active Web Push subscriptions
+    web_subs = get_active_web_push_subscriptions(req.callee_extension, redact=False)
+
+    total_recipients = len(tokens) + len(web_subs)
+    if total_recipients == 0:
+        logger.warning(f"No active mobile or Web Push devices found for callee {req.callee_extension}")
         return ApiResponse(
             success=False,
-            message=f"No active push tokens registered for extension {req.callee_extension}",
+            message=f"No active push devices registered for extension {req.callee_extension}",
             data={"call_uuid": req.call_uuid, "sent_count": 0, "call_record": call_record},
         )
 
-    # 3. Dispatch push to all active devices of callee
     results = []
+
+    # 4. Dispatch mobile push (Android FCM & native iOS APNs)
     for token_info in tokens:
         res = await push_sender.send_incoming_call_push(
             token_info=token_info,
@@ -281,14 +304,34 @@ async def trigger_incoming_push(req: IncomingPushRequest):
         )
         results.append(res)
 
+    # 5. Dispatch Web Push (iPhone PWA / Web standards)
+    web_push_data = {
+        "type": "incoming_call",
+        "callId": req.call_uuid,
+        "title": "SGT VoIP",
+        "body": f"Cuộc gọi đến từ {req.caller_display_name or req.caller_extension}",
+        "url": f"/softphone/calls/{req.call_uuid}",
+        "expiresAt": call_record.get("expires_at"),
+        "caller": req.caller_extension,
+        "callee": req.callee_extension,
+    }
+
+    for sub in web_subs:
+        w_res = await push_sender.send_web_push(
+            subscription_info=sub,
+            data=web_push_data,
+            ttl_seconds=req.ttl_seconds,
+        )
+        results.append(w_res)
+
     sent_count = sum(1 for r in results if r.get("status") in ("sent", "test_mock_dispatched"))
     logger.info(
-        f"Incoming push dispatched for call_uuid={req.call_uuid}: {sent_count}/{len(tokens)} successful"
+        f"Incoming push dispatched for call_uuid={req.call_uuid}: {sent_count}/{total_recipients} successful (mobile={len(tokens)}, web={len(web_subs)})"
     )
 
     return ApiResponse(
         success=sent_count > 0,
-        message=f"Dispatched push to {sent_count}/{len(tokens)} device(s)",
+        message=f"Dispatched push to {sent_count}/{total_recipients} device(s)",
         data={
             "call_uuid": req.call_uuid,
             "target_extension": req.callee_extension,
@@ -318,6 +361,7 @@ async def trigger_cancel_push(req: CancelPushRequest):
     # 2. Dispatch cancel push to callee's devices
     callee_ext = call_record.get("callee_extension")
     tokens = get_active_tokens_for_extension(callee_ext, redact_tokens=False) if callee_ext else []
+    web_subs = get_active_web_push_subscriptions(callee_ext, redact=False) if callee_ext else []
 
     results = []
     for token_info in tokens:
@@ -327,6 +371,19 @@ async def trigger_cancel_push(req: CancelPushRequest):
             reason=req.reason,
         )
         results.append(res)
+
+    cancel_web_data = {
+        "type": "cancel_call",
+        "callId": req.call_uuid,
+        "reason": req.reason,
+    }
+    for sub in web_subs:
+        w_res = await push_sender.send_web_push(
+            subscription_info=sub,
+            data=cancel_web_data,
+            ttl_seconds=10,
+        )
+        results.append(w_res)
 
     sent_count = sum(1 for r in results if r.get("status") in ("sent", "test_mock_dispatched"))
     return ApiResponse(
@@ -344,6 +401,58 @@ async def update_call_event(req: CallEventRequest):
         success=updated,
         message=f"Call {req.call_uuid} state updated to {req.status}" if updated else "Call not found",
         data={"call_uuid": req.call_uuid, "status": req.status},
+    )
+
+
+@app.post("/api/v1/internal/webpush/subscribe", response_model=ApiResponse, dependencies=[Depends(verify_internal_auth)])
+async def subscribe_webpush(req: WebPushSubscribeRequest):
+    """Register or refresh Web Push subscription (called by Odoo authenticated proxy)."""
+    try:
+        upsert_web_push_subscription(
+            extension=req.extension,
+            device_id=req.device_id,
+            endpoint=req.endpoint,
+            p256dh=req.p256dh,
+            auth=req.auth,
+        )
+        masked_ep = mask_endpoint(req.endpoint)
+        logger.info(f"Web Push subscription registered: ext={req.extension}, device={req.device_id}, endpoint={masked_ep}")
+        return ApiResponse(
+            success=True,
+            message="Web Push subscription registered successfully",
+            data={"extension": req.extension, "device_id": req.device_id},
+        )
+    except Exception as ex:
+        logger.error(f"Error registering Web Push subscription: {ex}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to register Web Push subscription",
+        )
+
+
+@app.post("/api/v1/internal/webpush/unsubscribe", response_model=ApiResponse, dependencies=[Depends(verify_internal_auth)])
+async def unsubscribe_webpush(req: WebPushUnsubscribeRequest):
+    """Revoke Web Push subscription."""
+    revoked = revoke_web_push_subscription(req.endpoint)
+    masked_ep = mask_endpoint(req.endpoint)
+    logger.info(f"Web Push subscription revoked: endpoint={masked_ep}, status={revoked}")
+    return ApiResponse(
+        success=True,
+        message="Web Push subscription revoked successfully" if revoked else "Subscription not found or already inactive",
+        data={"revoked": revoked},
+    )
+
+
+@app.get("/api/v1/internal/call/state/{call_uuid}", response_model=ApiResponse, dependencies=[Depends(verify_internal_auth)])
+async def get_call_state_internal(call_uuid: str):
+    """Query real-time call state and expiration (called by Odoo authenticated proxy)."""
+    call = get_call(call_uuid)
+    if not call:
+        raise HTTPException(status_code=404, detail="Call record not found")
+    return ApiResponse(
+        success=True,
+        message=f"Call state: {call.get('status')}",
+        data=call,
     )
 
 

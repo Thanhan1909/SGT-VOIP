@@ -5,7 +5,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 
 class CallForegroundService : Service() {
@@ -46,12 +48,24 @@ class CallForegroundService : Service() {
         }
     }
 
+    private val timeoutHandler = Handler(Looper.getMainLooper())
+    private val timeoutRunnable = Runnable {
+        Log.i(TAG, "CallForegroundService incoming call timeout (45s) reached. Stopping service.")
+        currentCallUuid = null
+        CallNotificationHelper.dismissCallNotification(this)
+        stopForeground(true)
+        stopSelf()
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action
         when (action) {
             ACTION_START_INCOMING -> {
+                timeoutHandler.removeCallbacks(timeoutRunnable)
+                timeoutHandler.postDelayed(timeoutRunnable, 45_000L)
+
                 val callUuid = intent.getStringExtra(CallNotificationHelper.EXTRA_CALL_UUID) ?: ""
                 val callerName = intent.getStringExtra(CallNotificationHelper.EXTRA_CALLER_NAME) ?: ""
                 val callerNumber = intent.getStringExtra(CallNotificationHelper.EXTRA_CALLER_NUMBER) ?: ""
@@ -82,6 +96,7 @@ class CallForegroundService : Service() {
                 }
             }
             ACTION_STOP_CALL -> {
+                timeoutHandler.removeCallbacks(timeoutRunnable)
                 currentCallUuid = null
                 CallNotificationHelper.dismissCallNotification(this)
                 stopForeground(true)
@@ -92,6 +107,7 @@ class CallForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        timeoutHandler.removeCallbacks(timeoutRunnable)
         currentCallUuid = null
         CallNotificationHelper.dismissCallNotification(this)
         super.onDestroy()

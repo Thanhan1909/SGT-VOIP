@@ -11,31 +11,34 @@ clearglobalvars=no
 [sub-push-dial]
 exten => s,1,NoOp(=== SUB-PUSH-DIAL: CALLER=${CALLERID(num)} TO=${ARG1} TIMEOUT=${ARG2} ===)
  same => n,Set(TARGET_EXT=${FILTER(0-9,${ARG1})})
- same => n,Set(CALL_TIMEOUT=${IF($["${ARG2}" != ""]?${ARG2}:30)})
+ same => n,Set(CALL_TIMEOUT=${IF($["${ARG2}" != ""]?${ARG2}:45)})
+ same => n,Set(START_TIME=${EPOCH})
+ same => n,Set(RING_DEADLINE=$[${START_TIME} + ${CALL_TIMEOUT}])
  same => n,Set(RAW_CALL_ID=${PJSIP_HEADER(read,Call-ID)})
  same => n,Set(CALL_UUID=${IF($["${RAW_CALL_ID}" != ""]?${RAW_CALL_ID}:${UNIQUEID})})
  same => n,Set(SAFE_UUID=${FILTER(0-9a-zA-Z_.-,${CALL_UUID})})
  same => n,Set(SAFE_CALLER=${FILTER(0-9*#+,${CALLERID(num)})})
  same => n,Set(SAFE_NAME=${FILTER(0-9a-zA-Z _.-,${CALLERID(name)})})
- ; Trigger push in background (fire-and-forget, non-blocking) to wake up mobile even if contact is stale
- same => n,System(/home/an-sgt/odoo19_01/push_gateway/asterisk_push_trigger.py incoming --call-uuid "${SAFE_UUID}" --caller "${SAFE_CALLER}" --caller-name "${SAFE_NAME}" --callee "${TARGET_EXT}" --ttl 30 &)
+ ; Trigger push in background (fire-and-forget, non-blocking) with exact CALL_TIMEOUT
+ same => n,System(/home/an-sgt/odoo19_01/push_gateway/asterisk_push_trigger.py incoming --call-uuid "${SAFE_UUID}" --caller "${SAFE_CALLER}" --caller-name "${SAFE_NAME}" --callee "${TARGET_EXT}" --ttl ${CALL_TIMEOUT} &)
  same => n,Set(CONTACTS=${PJSIP_DIAL_CONTACTS(${TARGET_EXT})})
  same => n,GotoIf($["${CONTACTS}" != ""]?do_dial)
- ; Target has no active contacts -> wait up to 10s for registration
- same => n,NoOp(--- TARGET ${TARGET_EXT} HAS NO ACTIVE CONTACTS. WAITING UP TO 10S ---)
+ ; Target has no active contacts -> ringback caller and wait within absolute deadline
+ same => n,NoOp(--- TARGET ${TARGET_EXT} HAS NO ACTIVE CONTACTS. RINGBACK AND WAIT UP TO ${CALL_TIMEOUT}S ---)
  same => n,Ringing()
- same => n,Set(WAIT_COUNT=0)
  same => n(wait_loop),Wait(1)
+ same => n,Set(REMAINING_TIMEOUT=$[${RING_DEADLINE} - ${EPOCH}])
+ same => n,GotoIf($[${REMAINING_TIMEOUT} <= 0]?finish)
  same => n,Set(CONTACTS=${PJSIP_DIAL_CONTACTS(${TARGET_EXT})})
  same => n,GotoIf($["${CONTACTS}" != ""]?do_dial)
- same => n,Set(WAIT_COUNT=$[${WAIT_COUNT} + 1])
- same => n,GotoIf($[${WAIT_COUNT} < 10]?wait_loop)
- same => n,NoOp(--- TARGET ${TARGET_EXT} DID NOT REGISTER AFTER 10S ---)
- same => n,Return()
- ; Proceed to dial target
+ same => n,Goto(wait_loop)
+ ; Proceed to dial target with remaining time within 45s absolute deadline
  same => n(do_dial),NoOp(--- DIALING TARGET ${TARGET_EXT} VIA ${CONTACTS} ---)
+ same => n,Set(REMAINING_TIMEOUT=$[${RING_DEADLINE} - ${EPOCH}])
+ same => n,GotoIf($[${REMAINING_TIMEOUT} <= 0]?finish)
  same => n,Set(CHANNEL(hangup_handler_push)=sub-push-cancel-on-hangup,s,1(${SAFE_UUID}))
- same => n,Dial(${CONTACTS},${CALL_TIMEOUT},tTb(sub-push-add-header^s^1(${SAFE_UUID})))
+ same => n,Dial(${CONTACTS},${REMAINING_TIMEOUT},tTb(sub-push-add-header^s^1(${SAFE_UUID})))
+ same => n(finish),NoOp(--- FINISHED CALL FOR ${SAFE_UUID} ---)
  same => n,Return()
 
 [sub-push-add-header]
@@ -67,36 +70,36 @@ exten => hotline,1,NoOp(=== TIEP NHAN CUOC GOI TU ZALO MINI APP ===)
  same => n,Set(CALLFILENAME=REC_ZALO_${STRFTIME(${EPOCH},,%Y%m%d_%H%M%S)}_${CALLERID(num)})
  ; Bật ghi âm tự động 2 chiều
  same => n,MixMonitor(/var/spool/asterisk/monitor/${CALLFILENAME}.wav,b)
- ; Đổ chuông máy Sales 201 trong 20s (gắn cờ tT để cả 2 bên có quyền đá luồng)
+ ; Đổ chuông máy Sales 201 trong 5s (hotline timeout)
  same => n,Gosub(sub-push-dial,s,1(201,5))
- ; Nếu 201 bận hoặc không nghe sau 20s -> Chuyển chuông sang Leader 202
+ ; Nếu 201 bận hoặc không nghe sau 5s -> Chuyển chuông sang Leader 202 trong 10s
  same => n,GotoIf($["${DIALSTATUS}" = "ANSWER"]?finish)
  same => n,NoOp(--- 201 KHONG NGHE -> CHUYEN SANG LEADER 202 ---)
  same => n,Gosub(sub-push-dial,s,1(202,10))
  same => n(finish),Hangup()
 
-; 3. Gọi nội bộ giữa máy 201 (Sales) và 202 (Leader) có hỗ trợ đá luồng
+; 3. Gọi nội bộ giữa máy 201, 202, 203 (45 giây ring window)
 exten => 201,1,NoOp(--- GOI DEN SALE 201 ---)
  same => n,Set(CALLFILENAME=REC_INTERNAL_201_${STRFTIME(${EPOCH},,%Y%m%d_%H%M%S)}_${CALLERID(num)})
  same => n,MixMonitor(/var/spool/asterisk/monitor/${CALLFILENAME}.wav,b)
- same => n,Gosub(sub-push-dial,s,1(201,30))
+ same => n,Gosub(sub-push-dial,s,1(201,45))
  same => n,Hangup()
 
 exten => 202,1,NoOp(--- GOI DEN LEADER 202 ---)
  same => n,Set(CALLFILENAME=REC_INTERNAL_202_${STRFTIME(${EPOCH},,%Y%m%d_%H%M%S)}_${CALLERID(num)})
  same => n,MixMonitor(/var/spool/asterisk/monitor/${CALLFILENAME}.wav,b)
- same => n,Gosub(sub-push-dial,s,1(202,30))
+ same => n,Gosub(sub-push-dial,s,1(202,45))
  same => n,Hangup()
 
 exten => 203,1,NoOp(--- GOI DEN GIAM DOC 203 ---)
  same => n,Set(CALLFILENAME=REC_INTERNAL_203_${STRFTIME(${EPOCH},,%Y%m%d_%H%M%S)}_${CALLERID(num)})
  same => n,MixMonitor(/var/spool/asterisk/monitor/${CALLFILENAME}.wav,b)
- same => n,Gosub(sub-push-dial,s,1(203,30))
+ same => n,Gosub(sub-push-dial,s,1(203,45))
  same => n,Hangup()
 
 ; Bắt mọi số 20X khác
 exten => _20X,1,NoOp(--- GOI DEN ${EXTEN} ---)
- same => n,Gosub(sub-push-dial,s,1(${EXTEN},30))
+ same => n,Gosub(sub-push-dial,s,1(${EXTEN},45))
  same => n,Hangup()
 
 ; ==========================================================

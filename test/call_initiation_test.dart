@@ -360,6 +360,9 @@ void main() {
       expect(sip.callScreenState, CallScreenState.incoming);
       expect(observer.pushedRoutes, contains('/incoming'));
       expect(find.text('Incoming Screen'), findsOneWidget);
+
+      sip.resetForTesting();
+      await tester.pumpAndSettle();
     });
 
     testWidgets(
@@ -840,6 +843,9 @@ void main() {
             .where((r) => r == '/incoming')
             .length;
         expect(pushCountAfter, 1);
+
+        sip.resetForTesting();
+        await tester.pumpAndSettle();
       },
     );
 

@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional
 import httpx
 import jwt
 
-from database import disable_push_token, mask_token
+from database import disable_push_token, mask_token, disable_web_push_subscription, mask_endpoint
 
 logger = logging.getLogger("sgt_push_gateway.push_sender")
 
@@ -28,6 +28,14 @@ class PushSender:
         self.apns_team_id = os.getenv("APNS_TEAM_ID", "")
         self.apns_bundle_id = os.getenv("APNS_BUNDLE_ID", "com.sgt.voip.flutterSipSoftphone")
 
+        # Web Push / VAPID Settings
+        self.vapid_public_key = os.getenv("VAPID_PUBLIC_KEY", "")
+        self.vapid_private_key_path = os.getenv(
+            "VAPID_PRIVATE_KEY_PATH",
+            "/etc/sgt-push-gateway/vapid_private.pem",
+        )
+        self.vapid_subject = os.getenv("VAPID_SUBJECT", "mailto:admin@sgtvoip.duckdns.org")
+
         # Test mode flag (only allowed via explicit env var in automated tests)
         self.test_mode = os.getenv("GATEWAY_TEST_MODE") == "1"
 
@@ -45,6 +53,10 @@ class PushSender:
             and bool(self.apns_key_id)
             and bool(self.apns_team_id)
         )
+        webpush_configured = (
+            bool(self.vapid_public_key)
+            and (os.path.isfile(self.vapid_private_key_path) or bool(os.getenv("VAPID_PRIVATE_KEY", "")))
+        )
         return {
             "fcm": {
                 "status": "configured" if fcm_configured else "not_configured",
@@ -58,6 +70,12 @@ class PushSender:
                 "key_id_set": bool(self.apns_key_id),
                 "team_id_set": bool(self.apns_team_id),
             },
+            "webpush": {
+                "status": "configured" if webpush_configured else "not_configured",
+                "mode": "mock_test" if self.test_mode else "production",
+                "public_key_set": bool(self.vapid_public_key),
+                "private_key_found": os.path.isfile(self.vapid_private_key_path) or bool(os.getenv("VAPID_PRIVATE_KEY", "")),
+            },
         }
 
     async def send_incoming_call_push(
@@ -67,7 +85,7 @@ class PushSender:
         caller_extension: str,
         caller_display_name: str,
         callee_extension: str,
-        ttl_seconds: int = 30,
+        ttl_seconds: int = 45,
     ) -> Dict[str, Any]:
         """Dispatch high-priority incoming call push to an individual device."""
         platform = token_info.get("platform", "android")
@@ -173,16 +191,18 @@ class PushSender:
         """Send high-priority data message via FCM HTTP v1."""
         masked = mask_token(push_token)
 
+        # Test mode mock check
+        if self.test_mode:
+            logger.info(f"[FCM MOCK_TEST] device={device_id} token={masked} action={data.get('action')}")
+            return {
+                "device_id": device_id,
+                "platform": "android",
+                "status": "test_mock_dispatched",
+                "message_id": f"mock_fcm_{data.get('call_uuid')}_{device_id}",
+            }
+
         # Check credentials existence
         if not os.path.isfile(self.firebase_credentials_path):
-            if self.test_mode:
-                logger.info(f"[FCM MOCK_TEST] device={device_id} token={masked} action={data.get('action')}")
-                return {
-                    "device_id": device_id,
-                    "platform": "android",
-                    "status": "test_mock_dispatched",
-                    "message_id": f"mock_fcm_{data.get('call_uuid')}_{device_id}",
-                }
             logger.warning(
                 f"[FCM NOT CONFIGURED] Credentials file missing at {self.firebase_credentials_path}. Push to {masked} skipped."
             )
@@ -295,6 +315,16 @@ class PushSender:
         """Send VoIP push via Apple APNs HTTP/2."""
         masked = mask_token(push_token)
 
+        # Test mode mock check
+        if self.test_mode:
+            logger.info(f"[APNs MOCK_TEST] device={device_id} token={masked} action={data.get('action')}")
+            return {
+                "device_id": device_id,
+                "platform": "ios",
+                "status": "test_mock_dispatched",
+                "message_id": f"mock_apns_{data.get('call_uuid')}_{device_id}",
+            }
+
         # Check credentials existence
         apns_ready = (
             os.path.isfile(self.apns_key_path)
@@ -302,14 +332,6 @@ class PushSender:
             and bool(self.apns_team_id)
         )
         if not apns_ready:
-            if self.test_mode:
-                logger.info(f"[APNs MOCK_TEST] device={device_id} token={masked} action={data.get('action')}")
-                return {
-                    "device_id": device_id,
-                    "platform": "ios",
-                    "status": "test_mock_dispatched",
-                    "message_id": f"mock_apns_{data.get('call_uuid')}_{device_id}",
-                }
             logger.warning(
                 f"[APNs NOT CONFIGURED] .p8 key file or KEY_ID missing. Push to {masked} skipped."
             )
@@ -395,3 +417,114 @@ class PushSender:
                 "status": "failed",
                 "error": str(ex),
             }
+
+    async def send_web_push(
+        self,
+        subscription_info: Dict[str, Any],
+        data: Dict[str, Any],
+        ttl_seconds: int = 45,
+    ) -> Dict[str, Any]:
+        """Dispatch standards-based Web Push to an individual subscription using pywebpush."""
+        endpoint = subscription_info.get("endpoint", "")
+        p256dh = subscription_info.get("p256dh", "")
+        auth = subscription_info.get("auth", "")
+        device_id = subscription_info.get("device_id", "")
+        masked_ep = mask_endpoint(endpoint)
+
+        if self.test_mode:
+            logger.info(f"[WebPush MOCK_TEST] device={device_id} endpoint={masked_ep} action={data.get('type', data.get('action'))}")
+            return {
+                "device_id": device_id,
+                "platform": "webpush",
+                "status": "test_mock_dispatched",
+                "message_id": f"mock_webpush_{data.get('callId', data.get('call_uuid'))}_{device_id}",
+            }
+
+        private_key = None
+        if os.path.isfile(self.vapid_private_key_path):
+            private_key = self.vapid_private_key_path
+        elif os.getenv("VAPID_PRIVATE_KEY"):
+            private_key = os.getenv("VAPID_PRIVATE_KEY")
+
+        if not private_key or not self.vapid_public_key:
+            logger.warning(f"[WebPush NOT CONFIGURED] VAPID keys missing. Push to {masked_ep} skipped.")
+            return {
+                "device_id": device_id,
+                "platform": "webpush",
+                "status": "provider_not_configured",
+                "error": "VAPID keys not configured",
+            }
+
+        sub_data = {
+            "endpoint": endpoint,
+            "keys": {
+                "p256dh": p256dh,
+                "auth": auth,
+            },
+        }
+
+        payload_str = json.dumps(data)
+        claims = {"sub": self.vapid_subject}
+
+        import asyncio
+        loop = asyncio.get_running_loop()
+
+        def _send():
+            from pywebpush import webpush, WebPushException
+            try:
+                response = webpush(
+                    subscription_info=sub_data,
+                    data=payload_str,
+                    vapid_private_key=private_key,
+                    vapid_claims=claims,
+                    ttl=max(1, min(ttl_seconds, 86400)),
+                    urgency="high",
+                    timeout=5.0,
+                )
+                return {"status_code": response.status_code if response else 200, "error": None}
+            except WebPushException as ex:
+                status_code = getattr(ex.response, "status_code", None) if getattr(ex, "response", None) else None
+                return {"status_code": status_code, "error": str(ex)}
+            except Exception as ex:
+                return {"status_code": None, "error": str(ex)}
+
+        attempts = 0
+        max_attempts = 2
+        last_error = None
+        status_code = None
+
+        while attempts < max_attempts:
+            attempts += 1
+            res = await loop.run_in_executor(None, _send)
+            status_code = res["status_code"]
+            last_error = res["error"]
+
+            if status_code in (200, 201, 202):
+                logger.info(f"[WebPush SENT] device={device_id} endpoint={masked_ep}")
+                return {
+                    "device_id": device_id,
+                    "platform": "webpush",
+                    "status": "sent",
+                }
+
+            if status_code in (404, 410):
+                logger.warning(f"[WebPush UNREGISTERED] Subscription {masked_ep} returned {status_code}. Disabling in DB.")
+                disable_web_push_subscription(endpoint)
+                return {
+                    "device_id": device_id,
+                    "platform": "webpush",
+                    "status": "unregistered",
+                    "error": last_error,
+                }
+
+            if attempts < max_attempts:
+                await asyncio.sleep(0.5)
+
+        logger.error(f"[WebPush ERROR] Status {status_code} for device={device_id}: {last_error}")
+        return {
+            "device_id": device_id,
+            "platform": "webpush",
+            "status": "failed",
+            "status_code": status_code,
+            "error": last_error,
+        }

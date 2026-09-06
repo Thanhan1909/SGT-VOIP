@@ -101,115 +101,136 @@ class _InCallScreenState extends State<InCallScreen> {
                             vertical: 16.0,
                           ),
                           child: Column(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const SizedBox(height: 12),
+                              Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const SizedBox(height: 12),
 
-                              // Status Top Pill Label
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: isConnected
-                                      ? AppConstants.accentGreen.withValues(
-                                          alpha: 0.15,
-                                        )
-                                      : AppConstants.accentAmber.withValues(
-                                          alpha: 0.15,
-                                        ),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: isConnected
-                                        ? AppConstants.accentGreen
-                                        : AppConstants.accentAmber,
-                                    width: 1.2,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      isConnected
-                                          ? Icons.phone_in_talk
-                                          : Icons.ring_volume,
-                                      size: 16,
-                                      color: isConnected
-                                          ? AppConstants.accentGreen
-                                          : AppConstants.accentAmber,
+                                  // Status Top Pill Label
+                                  Container(
+                                    constraints: const BoxConstraints(
+                                      maxWidth: 260,
                                     ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      sip.friendlyCallStatus,
-                                      style: TextStyle(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isConnected
+                                          ? AppConstants.accentGreen.withValues(
+                                              alpha: 0.15,
+                                            )
+                                          : AppConstants.accentAmber.withValues(
+                                              alpha: 0.15,
+                                            ),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
                                         color: isConnected
                                             ? AppConstants.accentGreen
                                             : AppConstants.accentAmber,
-                                        fontSize: 13,
+                                        width: 1.2,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          isConnected
+                                              ? Icons.phone_in_talk
+                                              : Icons.ring_volume,
+                                          size: 16,
+                                          color: isConnected
+                                              ? AppConstants.accentGreen
+                                              : AppConstants.accentAmber,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Flexible(
+                                          child: Text(
+                                            sip.friendlyCallStatus,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: isConnected
+                                                  ? AppConstants.accentGreen
+                                                  : AppConstants.accentAmber,
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 16),
+
+                                  // Remote Caller Avatar
+                                  Container(
+                                    width: 100,
+                                    height: 100,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: AppConstants.surfaceLight,
+                                      border: Border.all(
+                                        color: AppConstants.borderLight,
+                                        width: 2,
+                                      ),
+                                      boxShadow: const [
+                                        BoxShadow(
+                                          color: Color(0x0F000000),
+                                          blurRadius: 16,
+                                          spreadRadius: 4,
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Icon(
+                                      Icons.person,
+                                      size: 54,
+                                      color: AppConstants.textSecondary,
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 14),
+
+                                  // Remote Caller Number / Name
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16.0,
+                                    ),
+                                    child: Text(
+                                      remoteIdentity,
+                                      textAlign: TextAlign.center,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      softWrap: true,
+                                      style: const TextStyle(
+                                        color: AppConstants.textPrimary,
+                                        fontSize: 24,
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
-                                  ],
-                                ),
-                              ),
-
-                              const Spacer(flex: 1),
-
-                              // Remote Caller Avatar
-                              Container(
-                                width: 110,
-                                height: 110,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: AppConstants.surfaceLight,
-                                  border: Border.all(
-                                    color: AppConstants.borderLight,
-                                    width: 2,
                                   ),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      color: Color(0x0F000000),
-                                      blurRadius: 16,
-                                      spreadRadius: 4,
+
+                                  const SizedBox(height: 12),
+
+                                  // Realtime Duration Timer
+                                  Text(
+                                    sip.formattedDuration,
+                                    style: TextStyle(
+                                      color: isConnected
+                                          ? AppConstants.textPrimary
+                                          : AppConstants.textMuted,
+                                      fontSize: 24,
+                                      fontFamily: 'monospace',
+                                      fontWeight: FontWeight.w600,
                                     ),
-                                  ],
-                                ),
-                                child: const Icon(
-                                  Icons.person,
-                                  size: 58,
-                                  color: AppConstants.textSecondary,
-                                ),
+                                  ),
+                                ],
                               ),
 
                               const SizedBox(height: 16),
-
-                              // Remote Caller Number / Name
-                              Text(
-                                remoteIdentity,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  color: AppConstants.textPrimary,
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-
-                              const SizedBox(height: 16),
-
-                              // Realtime Duration Timer
-                              Text(
-                                sip.formattedDuration,
-                                style: TextStyle(
-                                  color: isConnected
-                                      ? AppConstants.textPrimary
-                                      : AppConstants.textMuted,
-                                  fontSize: 26,
-                                  fontFamily: 'monospace',
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-
-                              const Spacer(flex: 2),
 
                               // 5 Action Controls: Mute, Speaker, Keypad, Hold, Transfer
                               Padding(
@@ -270,7 +291,7 @@ class _InCallScreenState extends State<InCallScreen> {
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 16),
+                                    const SizedBox(height: 12),
                                     Row(
                                       mainAxisAlignment:
                                           MainAxisAlignment.center,
@@ -335,7 +356,7 @@ class _InCallScreenState extends State<InCallScreen> {
                                 ),
                               ),
 
-                              const SizedBox(height: 28),
+                              const SizedBox(height: 20),
 
                               // End Call Red Button
                               Center(
@@ -348,8 +369,8 @@ class _InCallScreenState extends State<InCallScreen> {
                                       onTap: () => _onHangup(sip),
                                       borderRadius: BorderRadius.circular(36),
                                       child: Container(
-                                        width: 72,
-                                        height: 72,
+                                        width: 70,
+                                        height: 70,
                                         decoration: const BoxDecoration(
                                           color: AppConstants.accentRed,
                                           shape: BoxShape.circle,
@@ -364,7 +385,7 @@ class _InCallScreenState extends State<InCallScreen> {
                                         child: const Icon(
                                           Icons.call_end,
                                           color: Colors.white,
-                                          size: 36,
+                                          size: 34,
                                         ),
                                       ),
                                     ),
@@ -372,7 +393,7 @@ class _InCallScreenState extends State<InCallScreen> {
                                 ),
                               ),
 
-                              const Spacer(flex: 1),
+                              const SizedBox(height: 12),
                             ],
                           ),
                         ),

@@ -35,8 +35,8 @@ class StatusIndicator extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),
         child: Container(
-          constraints: const BoxConstraints(minHeight: 36),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          constraints: const BoxConstraints(minHeight: 36, maxWidth: 170),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
             color: AppConstants.cardLight,
             borderRadius: BorderRadius.circular(20),
@@ -71,12 +71,16 @@ class StatusIndicator extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                statusText,
-                style: const TextStyle(
-                  color: AppConstants.textPrimary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
+              Flexible(
+                child: Text(
+                  statusText,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppConstants.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],

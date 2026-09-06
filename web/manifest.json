@@ -1,11 +1,12 @@
 {
-    "name": "flutter_sip_softphone",
-    "short_name": "flutter_sip_softphone",
-    "start_url": ".",
+    "name": "SGT VoIP Softphone",
+    "short_name": "SGT VoIP",
+    "start_url": "/softphone/",
+    "scope": "/softphone/",
     "display": "standalone",
-    "background_color": "#0175C2",
+    "background_color": "#0B132B",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "SGT VoIP Softphone PWA for iOS and Modern Browsers",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

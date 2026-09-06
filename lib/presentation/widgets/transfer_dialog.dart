@@ -35,6 +35,7 @@ class _TransferDialogState extends State<TransferDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      scrollable: true,
       backgroundColor: AppConstants.surfaceLight,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
@@ -44,12 +45,16 @@ class _TransferDialogState extends State<TransferDialog> {
         children: [
           Icon(Icons.phone_forwarded, color: AppConstants.accentGreen),
           SizedBox(width: 10),
-          Text(
-            'Chuyển Cuộc Gọi',
-            style: TextStyle(
-              color: AppConstants.textPrimary,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+          Expanded(
+            child: Text(
+              'Chuyển Cuộc Gọi',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: AppConstants.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ],

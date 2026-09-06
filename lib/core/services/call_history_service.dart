@@ -118,6 +118,7 @@ class CallHistoryService extends ChangeNotifier {
 
     final existing = getEntryByCorrelationId(norm);
     if (existing == null) return;
+    if (existing.endedAt != null) return;
 
     final now = DateTime.now();
     final answered = existing.answeredAt != null || wasAnswered;

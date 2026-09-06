@@ -6,7 +6,10 @@ class AppConstants {
   // URLs must never be compiled in because they expire whenever cloudflared
   // restarts.  A blank WSS value makes a bad release fail visibly instead of
   // silently connecting to the router HTTPS interface.
-  static const String defaultWssUri = String.fromEnvironment('SGT_WSS_URI');
+  static const String defaultWssUri = String.fromEnvironment(
+    'SGT_WSS_URI',
+    defaultValue: 'wss://sgtvoip.duckdns.org/ws',
+  );
   // Certificate bypass is never enabled implicitly by a debug build. It must
   // be explicitly opted into for a local-only debug session and is ignored by
   // release/profile builds.

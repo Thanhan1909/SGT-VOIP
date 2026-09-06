@@ -112,12 +112,16 @@ class _DialpadScreenState extends State<DialpadScreen> {
       appBar: AppBar(
         backgroundColor: AppConstants.surfaceLight,
         elevation: 0,
-        title: const Text(
-          'SGT Softphone',
-          style: TextStyle(
-            color: AppConstants.textPrimary,
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
+        title: const FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'SGT Softphone',
+            style: TextStyle(
+              color: AppConstants.textPrimary,
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+            ),
           ),
         ),
         actions: [

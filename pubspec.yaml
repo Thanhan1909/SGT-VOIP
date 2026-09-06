@@ -26,6 +26,7 @@ dependencies:
   provider: ^6.1.2
   flutter_spinkit: ^5.2.1
   intl: any
+  http: ^1.6.0
 
 dependency_overrides:
   flutter_webrtc:

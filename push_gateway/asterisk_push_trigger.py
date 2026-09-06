@@ -38,7 +38,7 @@ def sanitize_str(value: str, pattern: str = r"[^0-9a-zA-Z_.-]", max_len: int = 1
     return cleaned[:max_len]
 
 
-def trigger_incoming(call_uuid: str, caller: str, caller_name: str, callee: str, ttl: int = 30) -> int:
+def trigger_incoming(call_uuid: str, caller: str, caller_name: str, callee: str, ttl: int = 45) -> int:
     clean_uuid = sanitize_str(call_uuid, r"[^0-9a-zA-Z_.-]", 128)
     clean_caller = sanitize_str(caller, r"[^0-9a-zA-Z_#*+.-]", 32)
     clean_caller_name = sanitize_str(caller_name, r"[^0-9a-zA-Z _.-]", 64)
@@ -119,7 +119,7 @@ def main():
     inc.add_argument("--caller", required=True, help="Caller extension number")
     inc.add_argument("--caller-name", default="", help="Caller display name")
     inc.add_argument("--callee", required=True, help="Callee extension number")
-    inc.add_argument("--ttl", type=int, default=30, help="Push TTL in seconds")
+    inc.add_argument("--ttl", type=int, default=45, help="Push TTL in seconds")
 
     # cancel subparser
     can = subparsers.add_parser("cancel")

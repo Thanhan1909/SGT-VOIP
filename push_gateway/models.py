@@ -40,7 +40,7 @@ class IncomingPushRequest(BaseModel):
         ..., description="Callee extension or number"
     )
     asterisk_uniqueid: Optional[str] = Field(default=None, max_length=64, description="Asterisk Channel Unique ID")
-    ttl_seconds: int = Field(default=30, ge=5, le=120, description="Push and call TTL in seconds")
+    ttl_seconds: int = Field(default=45, ge=5, le=120, description="Push and call TTL in seconds")
 
 
 class CancelPushRequest(BaseModel):
@@ -54,6 +54,30 @@ class CallEventRequest(BaseModel):
     call_uuid: constr(strip_whitespace=True, min_length=4, max_length=128)
     status: Literal["ringing", "answered", "declined", "cancelled", "expired", "failed"]
     details: Optional[str] = Field(default=None, max_length=256)
+
+
+class WebPushSubscribeRequest(BaseModel):
+    extension: constr(strip_whitespace=True, min_length=2, max_length=10, pattern=r"^[0-9]+$") = Field(
+        ..., description="Numeric extension number, e.g. 201 or 202"
+    )
+    device_id: constr(strip_whitespace=True, min_length=4, max_length=128) = Field(
+        ..., description="Unique client device ID"
+    )
+    endpoint: constr(strip_whitespace=True, min_length=10, max_length=1024) = Field(
+        ..., description="W3C Web Push subscription endpoint URL"
+    )
+    p256dh: constr(strip_whitespace=True, min_length=10, max_length=256) = Field(
+        ..., description="P-256 client public key (base64url)"
+    )
+    auth: constr(strip_whitespace=True, min_length=10, max_length=128) = Field(
+        ..., description="Authentication secret (base64url)"
+    )
+
+
+class WebPushUnsubscribeRequest(BaseModel):
+    endpoint: constr(strip_whitespace=True, min_length=10, max_length=1024) = Field(
+        ..., description="W3C Web Push subscription endpoint URL to remove"
+    )
 
 
 class ApiResponse(BaseModel):

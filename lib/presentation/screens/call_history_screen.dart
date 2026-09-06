@@ -250,12 +250,16 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
           appBar: AppBar(
             backgroundColor: AppConstants.surfaceLight,
             elevation: 0,
-            title: const Text(
-              'Cuộc gọi',
-              style: TextStyle(
-                color: AppConstants.textPrimary,
-                fontWeight: FontWeight.bold,
-                fontSize: 20,
+            title: const FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Cuộc gọi',
+                style: TextStyle(
+                  color: AppConstants.textPrimary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                ),
               ),
             ),
             actions: [
@@ -367,30 +371,44 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
         ? Icons.phone_in_talk_outlined
         : Icons.search_off;
 
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 54,
-              color: AppConstants.textSecondary.withValues(alpha: 0.5),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              message,
-              style: const TextStyle(
-                fontSize: 15,
-                color: AppConstants.textSecondary,
-                fontWeight: FontWeight.w500,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24.0,
+                  vertical: 16.0,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      icon,
+                      size: 48,
+                      color: AppConstants.textSecondary.withValues(alpha: 0.5),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      message,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: AppConstants.textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               ),
-              textAlign: TextAlign.center,
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
