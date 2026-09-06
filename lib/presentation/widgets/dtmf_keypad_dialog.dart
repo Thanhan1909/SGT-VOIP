@@ -5,10 +5,8 @@ import '../../core/constants/app_constants.dart';
 class DtmfKeypadDialog extends StatelessWidget {
   final Function(String tone) onTonePressed;
 
-  const DtmfKeypadDialog({
-    Key? key,
-    required this.onTonePressed,
-  }) : super(key: key);
+  const DtmfKeypadDialog({Key? key, required this.onTonePressed})
+    : super(key: key);
 
   static const List<List<String>> _keys = [
     ['1', '2', '3'],
@@ -36,9 +34,10 @@ class DtmfKeypadDialog extends StatelessWidget {
                 const Text(
                   'Bàn phím DTMF (IVR)',
                   style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold),
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close, color: AppConstants.textMuted),

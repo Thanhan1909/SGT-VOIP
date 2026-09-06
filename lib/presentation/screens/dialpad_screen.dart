@@ -87,7 +87,10 @@ class _DialpadScreenState extends State<DialpadScreen> {
         title: const Text(
           'SGT Softphone',
           style: TextStyle(
-              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
         ),
         actions: [
           Padding(
@@ -115,15 +118,15 @@ class _DialpadScreenState extends State<DialpadScreen> {
             return SingleChildScrollView(
               physics: const ClampingScrollPhysics(),
               child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight,
-                ),
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 440),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 20.0, vertical: 12.0),
+                        horizontal: 20.0,
+                        vertical: 12.0,
+                      ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -132,7 +135,9 @@ class _DialpadScreenState extends State<DialpadScreen> {
                           // Number Input Display Area
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 10),
+                              horizontal: 16,
+                              vertical: 10,
+                            ),
                             decoration: BoxDecoration(
                               color: AppConstants.surfaceDark,
                               borderRadius: BorderRadius.circular(18),
@@ -209,7 +214,8 @@ class _DialpadScreenState extends State<DialpadScreen> {
                                 width: 68,
                                 height: 68,
                                 decoration: BoxDecoration(
-                                  color: sip.connectionStatus ==
+                                  color:
+                                      sip.connectionStatus ==
                                           SipConnectionStatus.online
                                       ? AppConstants.accentGreen
                                       : Colors.grey.shade700,
@@ -323,8 +329,10 @@ class _DialpadScreenState extends State<DialpadScreen> {
           child: FittedBox(
             fit: BoxFit.scaleDown,
             child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 4.0, vertical: 2.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 4.0,
+                vertical: 2.0,
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -359,8 +367,10 @@ class _DialpadScreenState extends State<DialpadScreen> {
   Widget _buildQuickTag(String label, String ext) {
     return ActionChip(
       backgroundColor: AppConstants.cardDark,
-      label: Text(label,
-          style: const TextStyle(color: Colors.white70, fontSize: 11)),
+      label: Text(
+        label,
+        style: const TextStyle(color: Colors.white70, fontSize: 11),
+      ),
       onPressed: () {
         setState(() {
           _numberController.text = ext;

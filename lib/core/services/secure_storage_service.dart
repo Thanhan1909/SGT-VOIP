@@ -8,12 +8,8 @@ import '../constants/app_constants.dart';
 /// Tuyệt đối không in mật khẩu ra console log.
 class SecureStorageService {
   static const _storage = FlutterSecureStorage(
-    aOptions: AndroidOptions(
-      encryptedSharedPreferences: true,
-    ),
-    iOptions: IOSOptions(
-      accessibility: KeychainAccessibility.first_unlock,
-    ),
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
   );
 
   static const String _keySipPassword = 'secure_sip_password';
@@ -25,7 +21,8 @@ class SecureStorageService {
       return await _storage.read(key: _keySipPassword);
     } catch (e) {
       debugPrint(
-          '[SecureStorageService] Error reading SIP password from secure storage');
+        '[SecureStorageService] Error reading SIP password from secure storage',
+      );
       return null;
     }
   }
@@ -36,7 +33,8 @@ class SecureStorageService {
       await _storage.write(key: _keySipPassword, value: password);
     } catch (e) {
       debugPrint(
-          '[SecureStorageService] Error saving SIP password to secure storage');
+        '[SecureStorageService] Error saving SIP password to secure storage',
+      );
       rethrow;
     }
   }
@@ -47,7 +45,8 @@ class SecureStorageService {
       return await _storage.read(key: _keyTurnPassword);
     } catch (e) {
       debugPrint(
-          '[SecureStorageService] Error reading TURN password from secure storage');
+        '[SecureStorageService] Error reading TURN password from secure storage',
+      );
       return null;
     }
   }
@@ -58,7 +57,8 @@ class SecureStorageService {
       await _storage.write(key: _keyTurnPassword, value: password);
     } catch (e) {
       debugPrint(
-          '[SecureStorageService] Error saving TURN password to secure storage');
+        '[SecureStorageService] Error saving TURN password to secure storage',
+      );
       rethrow;
     }
   }
@@ -81,7 +81,8 @@ class SecureStorageService {
         }
         await prefs.remove(AppConstants.keyPassword);
         debugPrint(
-            '[SecureStorageService] Migrated SIP password from SharedPreferences to Keystore/Keychain');
+          '[SecureStorageService] Migrated SIP password from SharedPreferences to Keystore/Keychain',
+        );
       }
 
       // Migration TURN password
@@ -92,12 +93,14 @@ class SecureStorageService {
           final migrated = await getTurnPassword();
           if (migrated != oldTurnPass) {
             throw StateError(
-                'TURN password secure-storage verification failed');
+              'TURN password secure-storage verification failed',
+            );
           }
         }
         await prefs.remove(AppConstants.keyTurnPassword);
         debugPrint(
-            '[SecureStorageService] Migrated TURN password from SharedPreferences to Keystore/Keychain');
+          '[SecureStorageService] Migrated TURN password from SharedPreferences to Keystore/Keychain',
+        );
       }
     } catch (e) {
       // Deliberately retain the legacy value when secure storage is unavailable.

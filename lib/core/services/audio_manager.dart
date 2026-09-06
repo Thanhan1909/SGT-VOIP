@@ -36,7 +36,8 @@ class AudioManager {
     await _ringbackPlayer.setReleaseMode(ReleaseMode.loop);
     _initialized = true;
     debugPrint(
-        '[AudioManager] Initialized ringtone/ringback and audio routing');
+      '[AudioManager] Initialized ringtone/ringback and audio routing',
+    );
   }
 
   Future<void> playRingtone() async {
@@ -94,7 +95,8 @@ class AudioManager {
     final pcm = Int16List(sampleCount);
     for (var index = 0; index < toneSamples; index++) {
       final time = index / sampleRate;
-      final sample = frequencies
+      final sample =
+          frequencies
               .map((frequency) => math.sin(2 * math.pi * frequency * time))
               .reduce((left, right) => left + right) /
           frequencies.length;

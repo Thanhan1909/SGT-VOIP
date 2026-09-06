@@ -14,19 +14,9 @@ void _log(String tag, String msg) {
   debugPrint('[$ts][$tag] $msg');
 }
 
-enum CallScreenState {
-  none,
-  incoming,
-  inCall,
-}
+enum CallScreenState { none, incoming, inCall }
 
-enum SipConnectionStatus {
-  offline,
-  connecting,
-  registering,
-  online,
-  error,
-}
+enum SipConnectionStatus { offline, connecting, registering, online, error }
 
 class SipManager extends ChangeNotifier
     with WidgetsBindingObserver
@@ -140,8 +130,10 @@ class SipManager extends ChangeNotifier
           (!_helper.connected ||
               !_helper.registered ||
               _connectionStatus != SipConnectionStatus.online)) {
-        _log('SipManager',
-            'App resumed & SIP offline -> Triggering immediate register()');
+        _log(
+          'SipManager',
+          'App resumed & SIP offline -> Triggering immediate register()',
+        );
         _reconnectAttempts = 0;
         register();
       }
@@ -182,14 +174,16 @@ class SipManager extends ChangeNotifier
       // profile builds always require a valid certificate.
       settings.webSocketSettings.allowBadCertificate =
           kDebugMode && AppConstants.allowBadCertificateInDebug;
-      settings.webSocketSettings.transport_scheme =
-          acc.wssUri.startsWith('wss') ? 'wss' : 'ws';
+      settings.webSocketSettings.transport_scheme = acc.wssUri.startsWith('wss')
+          ? 'wss'
+          : 'ws';
       settings.uri = 'sip:${acc.extension}@${acc.domain}';
       settings.authorizationUser = acc.extension;
       settings.password = acc.password;
       settings.realm = 'asterisk';
-      settings.displayName =
-          acc.displayName.isNotEmpty ? acc.displayName : acc.extension;
+      settings.displayName = acc.displayName.isNotEmpty
+          ? acc.displayName
+          : acc.extension;
       settings.userAgent = 'Flutter SGT VoIP Softphone / Asterisk 20';
       settings.register = true;
       // 25s auto-refresh registration via sip_ua registrator (fires at 20s < 32s Asterisk idle timeout)
@@ -204,10 +198,11 @@ class SipManager extends ChangeNotifier
       if (acc.stunUri.isNotEmpty && !acc.stunUri.contains('google.com')) {
         iceServers.add({'urls': acc.stunUri});
       }
-      for (final uri in acc.turnUri
-          .split(RegExp(r'[,\n]'))
-          .map((value) => value.trim())
-          .where((value) => value.isNotEmpty)) {
+      for (final uri
+          in acc.turnUri
+              .split(RegExp(r'[,\n]'))
+              .map((value) => value.trim())
+              .where((value) => value.isNotEmpty)) {
         final turnMap = <String, String>{'urls': uri};
         if (acc.turnUsername.isNotEmpty) {
           turnMap['username'] = acc.turnUsername;
@@ -312,11 +307,7 @@ class SipManager extends ChangeNotifier
       final callOptions = _helper.buildCallOptions(true);
       callOptions['mediaConstraints'] = mediaConstraints;
       _applyIceTransportPolicy(callOptions);
-      _helper.call(
-        targetUri,
-        voiceonly: true,
-        customOptions: callOptions,
-      );
+      _helper.call(targetUri, voiceonly: true, customOptions: callOptions);
     } catch (e, stack) {
       _log('SipManager', 'Error during makeCall: $e\n$stack');
     }
@@ -406,8 +397,9 @@ class SipManager extends ChangeNotifier
   Future<bool> transferCall(String targetExtension) async {
     if (_currentCall == null || targetExtension.trim().isEmpty) return false;
     final target = targetExtension.trim();
-    final targetUri =
-        target.contains('@') ? target : '$target@${_account!.domain}';
+    final targetUri = target.contains('@')
+        ? target
+        : '$target@${_account!.domain}';
 
     debugPrint('[SipManager] Transferring call to: $targetUri');
     try {
@@ -474,15 +466,18 @@ class SipManager extends ChangeNotifier
         final reportsById = {for (final report in reports) report.id: report};
         _signalingState = '${await pc.getSignalingState()}'.split('.').last;
         _iceState = '${await pc.getIceConnectionState()}'.split('.').last;
-        _peerConnectionState =
-            '${await pc.getConnectionState()}'.split('.').last;
+        _peerConnectionState = '${await pc.getConnectionState()}'
+            .split('.')
+            .last;
 
         if (!_loggedSessionDescriptions) {
           final local = await pc.getLocalDescription();
           final remote = await pc.getRemoteDescription();
           if (local?.sdp != null || remote?.sdp != null) {
-            _diag('WEBRTC_SDP',
-                'local=${_summarizeSdp(local?.sdp)} remote=${_summarizeSdp(remote?.sdp)}');
+            _diag(
+              'WEBRTC_SDP',
+              'local=${_summarizeSdp(local?.sdp)} remote=${_summarizeSdp(remote?.sdp)}',
+            );
             _loggedSessionDescriptions = true;
           }
         }
@@ -516,7 +511,7 @@ class SipManager extends ChangeNotifier
                   (int.tryParse('${vals['bytesReceived']}') ?? 0) > 0)) {
             _roundTripTime =
                 double.tryParse('${vals['currentRoundTripTime']}') ??
-                    _roundTripTime;
+                _roundTripTime;
             final local = reportsById['${vals['localCandidateId']}'];
             final remote = reportsById['${vals['remoteCandidateId']}'];
             _selectedCandidatePair =
@@ -540,13 +535,14 @@ class SipManager extends ChangeNotifier
         }
 
         _diag(
-            'WEBRTC_STATS',
-            '[Call-ID: ${call.id}] '
-                'Rcvd: $_packetsReceived pkts (${_bytesReceived}B) | '
-                'Sent: $_packetsSent pkts (${_bytesSent}B) | '
-                'Lost: $_packetsLost | Jitter: ${_jitter.toStringAsFixed(3)}s | '
-                'Codec: $_negotiatedCodec | ICE: $_iceState | DTLS: $_dtlsState | '
-                'Media: $_mediaState | Pair: $_selectedCandidatePair');
+          'WEBRTC_STATS',
+          '[Call-ID: ${call.id}] '
+              'Rcvd: $_packetsReceived pkts (${_bytesReceived}B) | '
+              'Sent: $_packetsSent pkts (${_bytesSent}B) | '
+              'Lost: $_packetsLost | Jitter: ${_jitter.toStringAsFixed(3)}s | '
+              'Codec: $_negotiatedCodec | ICE: $_iceState | DTLS: $_dtlsState | '
+              'Media: $_mediaState | Pair: $_selectedCandidatePair',
+        );
         notifyListeners();
       } catch (e) {
         _log('WEBRTC_STATS', 'Collection error: $e');
@@ -554,10 +550,7 @@ class SipManager extends ChangeNotifier
     }
 
     collect();
-    _statsTimer = Timer.periodic(
-      const Duration(seconds: 2),
-      (_) => collect(),
-    );
+    _statsTimer = Timer.periodic(const Duration(seconds: 2), (_) => collect());
   }
 
   void _stopWebRtcStatsCollection() {
@@ -619,11 +612,13 @@ class SipManager extends ChangeNotifier
     if (sdp == null || sdp.isEmpty) return 'none';
     return sdp
         .split(RegExp(r'\r?\n'))
-        .where((line) =>
-            line.startsWith('m=audio') ||
-            line.startsWith('a=rtpmap:') ||
-            line.startsWith('a=fingerprint:') ||
-            line.startsWith('a=candidate:'))
+        .where(
+          (line) =>
+              line.startsWith('m=audio') ||
+              line.startsWith('a=rtpmap:') ||
+              line.startsWith('a=fingerprint:') ||
+              line.startsWith('a=candidate:'),
+        )
         .join(' | ');
   }
 
@@ -631,8 +626,10 @@ class SipManager extends ChangeNotifier
 
   @override
   void registrationStateChanged(RegistrationState state) {
-    _log('TIMING',
-        'registrationStateChanged: ${state.state} (cause=${state.cause?.toString()})');
+    _log(
+      'TIMING',
+      'registrationStateChanged: ${state.state} (cause=${state.cause?.toString()})',
+    );
     switch (state.state) {
       case RegistrationStateEnum.REGISTERED:
         _reconnectAttempts = 0;
@@ -664,8 +661,10 @@ class SipManager extends ChangeNotifier
     if (_currentCall != null || _isReconfiguring) return;
     _reconnectTimer?.cancel();
     if (_reconnectAttempts >= _maxReconnectAttempts) {
-      _log('SipManager',
-          'Max auto-reconnect attempts reached ($_maxReconnectAttempts).');
+      _log(
+        'SipManager',
+        'Max auto-reconnect attempts reached ($_maxReconnectAttempts).',
+      );
       _connectionStatus = SipConnectionStatus.error;
       _statusMessage = 'Mất kết nối. Chạm biểu tượng để thử lại.';
       notifyListeners();
@@ -678,8 +677,10 @@ class SipManager extends ChangeNotifier
           _currentCall == null &&
           !_isReconfiguring) {
         _reconnectAttempts++;
-        _log('SipManager',
-            'Auto-reconnecting (attempt $_reconnectAttempts/$_maxReconnectAttempts in ${delaySeconds}s)...');
+        _log(
+          'SipManager',
+          'Auto-reconnecting (attempt $_reconnectAttempts/$_maxReconnectAttempts in ${delaySeconds}s)...',
+        );
         register();
       }
     });
@@ -687,8 +688,10 @@ class SipManager extends ChangeNotifier
 
   @override
   void callStateChanged(Call call, CallState state) {
-    _log('TIMING',
-        'callStateChanged: state=${state.state}, origin=${call.direction}, id=${call.id}');
+    _log(
+      'TIMING',
+      'callStateChanged: state=${state.state}, origin=${call.direction}, id=${call.id}',
+    );
     _currentCall = call;
     _callState = state;
 
@@ -698,8 +701,10 @@ class SipManager extends ChangeNotifier
         _resetWebRtcDiagnostics();
         _callDurationSeconds = 0;
         if (call.direction.toUpperCase() == 'INCOMING') {
-          _log('TIMING',
-              '>>> INCOMING INVITE received! Starting ringtone and navigating to incoming call screen.');
+          _log(
+            'TIMING',
+            '>>> INCOMING INVITE received! Starting ringtone and navigating to incoming call screen.',
+          );
           _audioManager.playRingtone();
           _navigateToIncomingCall();
         }
@@ -712,13 +717,17 @@ class SipManager extends ChangeNotifier
 
       case CallStateEnum.STREAM:
         final audioTracks = state.stream?.getAudioTracks() ?? [];
-        _diag('WEBRTC_MEDIA',
-            'Remote stream received: ${audioTracks.length} audio track(s), enabled=${audioTracks.map((track) => track.enabled).toList()}');
+        _diag(
+          'WEBRTC_MEDIA',
+          'Remote stream received: ${audioTracks.length} audio track(s), enabled=${audioTracks.map((track) => track.enabled).toList()}',
+        );
         break;
 
       case CallStateEnum.PROGRESS:
-        _log('TIMING',
-            'Call is PROGRESS (180/183 Ringing), origin=${call.direction}');
+        _log(
+          'TIMING',
+          'Call is PROGRESS (180/183 Ringing), origin=${call.direction}',
+        );
         if (call.direction.toUpperCase() == 'OUTGOING') {
           _audioManager.playRingback();
           _navigateToInCall();
@@ -760,8 +769,10 @@ class SipManager extends ChangeNotifier
 
       case CallStateEnum.ENDED:
       case CallStateEnum.FAILED:
-        _log('TIMING',
-            '>>> Call ${state.state} (origin=${call.direction}, cause=${state.cause})');
+        _log(
+          'TIMING',
+          '>>> Call ${state.state} (origin=${call.direction}, cause=${state.cause})',
+        );
         _audioManager.stopAll();
         _stopCallTimer();
         _stopWebRtcStatsCollection();
@@ -811,8 +822,10 @@ class SipManager extends ChangeNotifier
   CallScreenState get callScreenState => _callScreenState;
 
   void _navigateToIncomingCall() {
-    _log('SipManager',
-        'Attempting navigation to incoming call screen. Current state: $_callScreenState');
+    _log(
+      'SipManager',
+      'Attempting navigation to incoming call screen. Current state: $_callScreenState',
+    );
     if (_callScreenState == CallScreenState.none) {
       _callScreenState = CallScreenState.incoming;
       navigatorKey?.currentState?.pushNamed('/incoming').then((_) {
@@ -820,14 +833,18 @@ class SipManager extends ChangeNotifier
         _callScreenState = CallScreenState.none;
       });
     } else {
-      _log('SipManager',
-          'Skip navigating to incoming screen: already in state $_callScreenState');
+      _log(
+        'SipManager',
+        'Skip navigating to incoming screen: already in state $_callScreenState',
+      );
     }
   }
 
   void _navigateToInCall() {
-    _log('SipManager',
-        'Attempting navigation to in-call screen. Current state: $_callScreenState');
+    _log(
+      'SipManager',
+      'Attempting navigation to in-call screen. Current state: $_callScreenState',
+    );
     if (_callScreenState == CallScreenState.incoming) {
       _log('SipManager', 'Replacing incoming call screen with in-call screen');
       _callScreenState = CallScreenState.inCall;
@@ -843,14 +860,18 @@ class SipManager extends ChangeNotifier
         _callScreenState = CallScreenState.none;
       });
     } else {
-      _log('SipManager',
-          'Skip navigating to in-call screen: already in state $_callScreenState');
+      _log(
+        'SipManager',
+        'Skip navigating to in-call screen: already in state $_callScreenState',
+      );
     }
   }
 
   void _navigateBackToDialpad() {
-    _log('SipManager',
-        'Navigating back to dialpad from state: $_callScreenState');
+    _log(
+      'SipManager',
+      'Navigating back to dialpad from state: $_callScreenState',
+    );
     if (_callScreenState != CallScreenState.none) {
       _callScreenState = CallScreenState.none;
       try {

@@ -30,9 +30,7 @@ void main() async {
 
   runApp(
     MultiProvider(
-      providers: [
-        ChangeNotifierProvider<SipManager>.value(value: sipManager),
-      ],
+      providers: [ChangeNotifierProvider<SipManager>.value(value: sipManager)],
       child: const SGTSoftphoneApp(),
     ),
   );

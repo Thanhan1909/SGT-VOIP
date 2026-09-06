@@ -22,66 +22,69 @@ void main() {
       expect(account.domain, 'sgtvoip.duckdns.org');
     });
 
-    test('Migration from SharedPreferences to SecureStorage works safely',
-        () async {
-      // Giả lập dữ liệu cũ từng lưu password trong SharedPreferences
-      SharedPreferences.setMockInitialValues({
-        AppConstants.keyPassword: 'LegacyPassword123',
-        AppConstants.keyTurnPassword: 'LegacyTurnPass123',
-        AppConstants.keyExtension: '201',
-      });
+    test(
+      'Migration from SharedPreferences to SecureStorage works safely',
+      () async {
+        // Giả lập dữ liệu cũ từng lưu password trong SharedPreferences
+        SharedPreferences.setMockInitialValues({
+          AppConstants.keyPassword: 'LegacyPassword123',
+          AppConstants.keyTurnPassword: 'LegacyTurnPass123',
+          AppConstants.keyExtension: '201',
+        });
 
-      // Thực hiện migration
-      await SecureStorageService.migrateFromSharedPreferences();
+        // Thực hiện migration
+        await SecureStorageService.migrateFromSharedPreferences();
 
-      // Kiểm tra: mật khẩu đã được chuyển vào SecureStorage
-      final secureSipPass = await SecureStorageService.getSipPassword();
-      final secureTurnPass = await SecureStorageService.getTurnPassword();
-      expect(secureSipPass, 'LegacyPassword123');
-      expect(secureTurnPass, 'LegacyTurnPass123');
+        // Kiểm tra: mật khẩu đã được chuyển vào SecureStorage
+        final secureSipPass = await SecureStorageService.getSipPassword();
+        final secureTurnPass = await SecureStorageService.getTurnPassword();
+        expect(secureSipPass, 'LegacyPassword123');
+        expect(secureTurnPass, 'LegacyTurnPass123');
 
-      // Kiểm tra: SharedPreferences đã bị xóa sạch mật khẩu
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.containsKey(AppConstants.keyPassword), isFalse);
-      expect(prefs.containsKey(AppConstants.keyTurnPassword), isFalse);
-      expect(prefs.getString(AppConstants.keyExtension), '201');
-    });
+        // Kiểm tra: SharedPreferences đã bị xóa sạch mật khẩu
+        final prefs = await SharedPreferences.getInstance();
+        expect(prefs.containsKey(AppConstants.keyPassword), isFalse);
+        expect(prefs.containsKey(AppConstants.keyTurnPassword), isFalse);
+        expect(prefs.getString(AppConstants.keyExtension), '201');
+      },
+    );
 
     test(
-        'SipAccount saveToPrefs and loadFromPrefs roundtrip with SecureStorage',
-        () async {
-      final account = SipAccount(
-        wssUri: 'wss://sgtvoip.duckdns.org/ws',
-        domain: 'sgtvoip.duckdns.org',
-        extension: '202',
-        password: 'SuperSecretPassword@202',
-        displayName: 'Leader 202',
-        stunUri: 'stun:stun.l.google.com:19302',
-        turnUri: 'turn:sgtvoip.duckdns.org:3478',
-        turnUsername: 'webrtc_user',
-        turnPassword: 'TurnSecretPassword@202',
-        iceGatheringTimeoutMs: 12000,
-        forceRelayOnly: true,
-        diagnosticLogging: true,
-      );
+      'SipAccount saveToPrefs and loadFromPrefs roundtrip with SecureStorage',
+      () async {
+        final account = SipAccount(
+          wssUri: 'wss://sgtvoip.duckdns.org/ws',
+          domain: 'sgtvoip.duckdns.org',
+          extension: '202',
+          password: 'SuperSecretPassword@202',
+          displayName: 'Leader 202',
+          stunUri: 'stun:stun.l.google.com:19302',
+          turnUri: 'turn:sgtvoip.duckdns.org:3478',
+          turnUsername: 'webrtc_user',
+          turnPassword: 'TurnSecretPassword@202',
+          iceGatheringTimeoutMs: 12000,
+          forceRelayOnly: true,
+          diagnosticLogging: true,
+        );
 
-      await account.saveToPrefs();
+        await account.saveToPrefs();
 
-      // Load lại từ Storage
-      final loadedAccount = await SipAccount.loadFromPrefs();
+        // Load lại từ Storage
+        final loadedAccount = await SipAccount.loadFromPrefs();
 
-      expect(loadedAccount.extension, '202');
-      expect(loadedAccount.password, 'SuperSecretPassword@202');
-      expect(loadedAccount.turnPassword, 'TurnSecretPassword@202');
-      expect(loadedAccount.displayName, 'Leader 202');
-      expect(loadedAccount.iceGatheringTimeoutMs, 12000);
-      expect(loadedAccount.forceRelayOnly, isTrue);
-      expect(loadedAccount.diagnosticLogging, isTrue);
+        expect(loadedAccount.extension, '202');
+        expect(loadedAccount.password, 'SuperSecretPassword@202');
+        expect(loadedAccount.turnPassword, 'TurnSecretPassword@202');
+        expect(loadedAccount.displayName, 'Leader 202');
+        expect(loadedAccount.iceGatheringTimeoutMs, 12000);
+        expect(loadedAccount.forceRelayOnly, isTrue);
+        expect(loadedAccount.diagnosticLogging, isTrue);
 
-      // Xác minh SharedPreferences không lưu password cleartext
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.containsKey(AppConstants.keyPassword), isFalse);
-      expect(prefs.containsKey(AppConstants.keyTurnPassword), isFalse);
-    });
+        // Xác minh SharedPreferences không lưu password cleartext
+        final prefs = await SharedPreferences.getInstance();
+        expect(prefs.containsKey(AppConstants.keyPassword), isFalse);
+        expect(prefs.containsKey(AppConstants.keyTurnPassword), isFalse);
+      },
+    );
   });
 }

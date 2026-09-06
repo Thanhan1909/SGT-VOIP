@@ -85,12 +85,15 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                   return SingleChildScrollView(
                     physics: const ClampingScrollPhysics(),
                     child: ConstrainedBox(
-                      constraints:
-                          BoxConstraints(minHeight: constraints.maxHeight),
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
                       child: IntrinsicHeight(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 24.0, vertical: 24.0),
+                            horizontal: 24.0,
+                            vertical: 24.0,
+                          ),
                           child: Column(
                             children: [
                               const SizedBox(height: 20),
@@ -113,12 +116,14 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                                 builder: (context, child) {
                                   return Container(
                                     padding: EdgeInsets.all(
-                                        18.0 * _animController.value),
+                                      18.0 * _animController.value,
+                                    ),
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
                                       color: AppConstants.accentGreen
                                           .withOpacity(
-                                              0.15 * _animController.value),
+                                            0.15 * _animController.value,
+                                          ),
                                     ),
                                     child: Container(
                                       width: 120,
@@ -127,8 +132,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                                         shape: BoxShape.circle,
                                         color: AppConstants.cardDark,
                                         border: Border.all(
-                                            color: AppConstants.accentGreen,
-                                            width: 2),
+                                          color: AppConstants.accentGreen,
+                                          width: 2,
+                                        ),
                                         boxShadow: [
                                           BoxShadow(
                                             color: AppConstants.accentGreen
@@ -173,7 +179,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                               // Accept (Green) and Decline (Red) Action Buttons
                               Padding(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 32.0),
+                                  horizontal: 32.0,
+                                ),
                                 child: Row(
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,
@@ -201,17 +208,21 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                                                 ),
                                               ],
                                             ),
-                                            child: const Icon(Icons.call_end,
-                                                color: Colors.white, size: 32),
+                                            child: const Icon(
+                                              Icons.call_end,
+                                              color: Colors.white,
+                                              size: 32,
+                                            ),
                                           ),
                                         ),
                                         const SizedBox(height: 8),
                                         const Text(
                                           'Từ chối',
                                           style: TextStyle(
-                                              color: Colors.white70,
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 13),
+                                            color: Colors.white70,
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 13,
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -237,17 +248,21 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                                                 ),
                                               ],
                                             ),
-                                            child: const Icon(Icons.phone,
-                                                color: Colors.white, size: 32),
+                                            child: const Icon(
+                                              Icons.phone,
+                                              color: Colors.white,
+                                              size: 32,
+                                            ),
                                           ),
                                         ),
                                         const SizedBox(height: 8),
                                         const Text(
                                           'Trả lời',
                                           style: TextStyle(
-                                              color: Colors.white70,
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 13),
+                                            color: Colors.white70,
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 13,
+                                          ),
                                         ),
                                       ],
                                     ),

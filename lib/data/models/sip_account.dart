@@ -66,10 +66,12 @@ class SipAccount {
           prefs.getString(AppConstants.keyWssUri) ?? AppConstants.defaultWssUri,
       domain:
           prefs.getString(AppConstants.keyDomain) ?? AppConstants.defaultDomain,
-      extension: prefs.getString(AppConstants.keyExtension) ??
+      extension:
+          prefs.getString(AppConstants.keyExtension) ??
           AppConstants.defaultExtension,
       password: securePassword,
-      displayName: prefs.getString(AppConstants.keyDisplayName) ??
+      displayName:
+          prefs.getString(AppConstants.keyDisplayName) ??
           AppConstants.defaultDisplayName,
       stunUri: (savedStun != null && savedStun.isNotEmpty)
           ? savedStun
@@ -83,7 +85,7 @@ class SipAccount {
       turnPassword: secureTurnPass,
       iceGatheringTimeoutMs:
           prefs.getInt(AppConstants.keyIceGatheringTimeoutMs) ??
-              AppConstants.defaultIceGatheringTimeoutMs,
+          AppConstants.defaultIceGatheringTimeoutMs,
       forceRelayOnly: prefs.getBool(AppConstants.keyForceRelayOnly) ?? false,
       diagnosticLogging:
           prefs.getBool(AppConstants.keyDiagnosticLogging) ?? false,
@@ -100,7 +102,9 @@ class SipAccount {
     await prefs.setString(AppConstants.keyTurnUri, turnUri);
     await prefs.setString(AppConstants.keyTurnUsername, turnUsername);
     await prefs.setInt(
-        AppConstants.keyIceGatheringTimeoutMs, iceGatheringTimeoutMs);
+      AppConstants.keyIceGatheringTimeoutMs,
+      iceGatheringTimeoutMs,
+    );
     await prefs.setBool(AppConstants.keyForceRelayOnly, forceRelayOnly);
     await prefs.setBool(AppConstants.keyDiagnosticLogging, diagnosticLogging);
 

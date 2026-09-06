@@ -27,8 +27,9 @@ class AppConstants {
   // ICE NAT / STUN / TURN Settings
   static const String defaultStunUri = 'stun:stun.l.google.com:19302';
   static const String defaultTurnUri = String.fromEnvironment('SGT_TURN_URIS');
-  static const String defaultTurnUsername =
-      String.fromEnvironment('SGT_TURN_USERNAME');
+  static const String defaultTurnUsername = String.fromEnvironment(
+    'SGT_TURN_USERNAME',
+  );
   static const String defaultTurnPassword = '';
   static const int defaultIceGatheringTimeoutMs = 8000;
 

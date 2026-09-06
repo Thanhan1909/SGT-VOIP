@@ -47,8 +47,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _turnController = TextEditingController(text: acc.turnUri);
     _turnUserController = TextEditingController(text: acc.turnUsername);
     _turnPassController = TextEditingController(text: acc.turnPassword);
-    _iceTimeoutController =
-        TextEditingController(text: acc.iceGatheringTimeoutMs.toString());
+    _iceTimeoutController = TextEditingController(
+      text: acc.iceGatheringTimeoutMs.toString(),
+    );
     _forceRelayOnly = acc.forceRelayOnly;
     _diagnosticLogging = acc.diagnosticLogging;
   }
@@ -146,7 +147,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         title: const Text(
           'Cài Đặt Tổng Đài SIP',
           style: TextStyle(
-              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
         ),
         actions: [
           IconButton(
@@ -325,14 +329,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppConstants.accentBlue,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
                   icon: _isSaving
                       ? const SizedBox(
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white),
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
                       : const Icon(Icons.check_circle, color: Colors.white),
                   label: Text(
@@ -340,9 +347,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ? 'Đang lưu & đăng ký...'
                         : 'Lưu & Đăng Ký Lại SIP',
                     style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold),
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   onPressed: _isSaving ? null : () => _saveAndRegister(sip),
                 ),
@@ -358,16 +366,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: AppConstants.accentRed),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
-                  icon: const Icon(Icons.power_settings_new,
-                      color: AppConstants.accentRed),
+                  icon: const Icon(
+                    Icons.power_settings_new,
+                    color: AppConstants.accentRed,
+                  ),
                   label: const Text(
                     'Ngắt Kết Nối Tổng Đài',
                     style: TextStyle(
-                        color: AppConstants.accentRed,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600),
+                      color: AppConstants.accentRed,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   onPressed: () {
                     sip.unregister();
@@ -418,21 +430,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
         style: const TextStyle(color: Colors.white, fontSize: 15),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle:
-              const TextStyle(color: AppConstants.textMuted, fontSize: 13),
+          labelStyle: const TextStyle(
+            color: AppConstants.textMuted,
+            fontSize: 13,
+          ),
           hintText: hint,
           hintStyle: const TextStyle(color: Colors.white24),
           prefixIcon: Icon(icon, color: Colors.white54, size: 20),
           suffixIcon: isPassword
               ? IconButton(
-                  icon: Icon(obscure ? Icons.visibility_off : Icons.visibility,
-                      color: Colors.white54, size: 20),
+                  icon: Icon(
+                    obscure ? Icons.visibility_off : Icons.visibility,
+                    color: Colors.white54,
+                    size: 20,
+                  ),
                   onPressed: onToggleObscure,
                 )
               : null,
           border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
         ),
         validator: validator,
       ),
