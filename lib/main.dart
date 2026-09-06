@@ -47,7 +47,7 @@ Future<void> _requestPermissions() async {
 }
 
 class SGTSoftphoneApp extends StatelessWidget {
-  const SGTSoftphoneApp({Key? key}) : super(key: key);
+  const SGTSoftphoneApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -56,23 +56,25 @@ class SGTSoftphoneApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       navigatorKey: rootNavigatorKey,
       theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: AppConstants.primaryDark,
-        primaryColor: AppConstants.accentBlue,
-        cardColor: AppConstants.cardDark,
-        colorScheme: ColorScheme.dark(
-          primary: AppConstants.accentBlue,
+        brightness: Brightness.light,
+        scaffoldBackgroundColor: AppConstants.backgroundLight,
+        primaryColor: AppConstants.accentGreen,
+        cardColor: AppConstants.surfaceLight,
+        colorScheme: const ColorScheme.light(
+          primary: AppConstants.accentGreen,
           secondary: AppConstants.accentGreen,
-          surface: AppConstants.surfaceDark,
-          background: AppConstants.primaryDark,
+          surface: AppConstants.surfaceLight,
           error: AppConstants.accentRed,
+          onPrimary: Colors.white,
+          onSurface: AppConstants.textPrimary,
         ),
         fontFamily: 'Roboto',
         appBarTheme: const AppBarTheme(
-          backgroundColor: AppConstants.primaryDark,
+          backgroundColor: AppConstants.surfaceLight,
+          foregroundColor: AppConstants.textPrimary,
           elevation: 0,
           centerTitle: false,
-          systemOverlayStyle: SystemUiOverlayStyle.light,
+          systemOverlayStyle: SystemUiOverlayStyle.dark,
         ),
       ),
       initialRoute: '/',

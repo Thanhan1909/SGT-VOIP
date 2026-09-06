@@ -15,6 +15,8 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:flutter_sip_softphone/core/services/sip_manager.dart';
 import 'package:flutter_sip_softphone/data/models/sip_account.dart';
 import 'package:flutter_sip_softphone/presentation/screens/in_call_screen.dart';
+import 'package:flutter_sip_softphone/presentation/screens/dialpad_screen.dart';
+import 'package:flutter_sip_softphone/presentation/screens/incoming_call_screen.dart';
 
 class FakeCall implements Call {
   @override
@@ -106,6 +108,9 @@ class FakeSIPUAHelper extends SIPUAHelper {
 
   @override
   void stop() {}
+
+  @override
+  Future<void> start(UaSettings settings) async {}
 }
 
 class TestRouteObserver extends NavigatorObserver {
@@ -678,6 +683,253 @@ void main() {
           () => MapHelper.merge<String>(defaults, capturedOptions!),
           returnsNormally,
         );
+      },
+    );
+
+    test(
+      '19. Speakerphone mặc định false ở cuộc gọi mới, chỉ đổi khi toggle và reset sau ENDED',
+      () async {
+        final sip = SipManager();
+        sip.resetForTesting();
+        sip.setHelperForTesting(FakeSIPUAHelper());
+        final fakeCall = FakeCall(
+          direction: 'INCOMING',
+          id: 'speaker-test-call',
+        );
+
+        // Cuộc gọi đến: CALL_INITIATION
+        sip.callStateChanged(
+          fakeCall,
+          CallState(CallStateEnum.CALL_INITIATION),
+        );
+        expect(sip.isSpeakerOn, isFalse);
+
+        // Cuộc gọi được chấp nhận: CONFIRMED
+        sip.callStateChanged(fakeCall, CallState(CallStateEnum.CONFIRMED));
+        expect(sip.isSpeakerOn, isFalse);
+
+        // Người dùng bấm bật loa ngoài
+        sip.toggleSpeaker();
+        expect(sip.isSpeakerOn, isTrue);
+
+        // Người dùng bấm tắt loa ngoài
+        sip.toggleSpeaker();
+        expect(sip.isSpeakerOn, isFalse);
+
+        // Bật lại rồi kết thúc cuộc gọi
+        sip.toggleSpeaker();
+        expect(sip.isSpeakerOn, isTrue);
+
+        sip.callStateChanged(fakeCall, CallState(CallStateEnum.ENDED));
+        expect(sip.isSpeakerOn, isFalse);
+      },
+    );
+
+    testWidgets(
+      '20. Ẩn thông tin kỹ thuật Media/ICE/DTLS/RTP trên Dialpad và InCall',
+      (WidgetTester tester) async {
+        final sip = SipManager();
+        sip.resetForTesting();
+        sip.setHelperForTesting(FakeSIPUAHelper());
+        final fakeCall = FakeCall(direction: 'OUTGOING', id: 'diag-hide-call');
+        sip.setCurrentCallForTesting(
+          fakeCall,
+          CallState(CallStateEnum.CONFIRMED),
+        );
+
+        // Test DialpadScreen
+        await tester.pumpWidget(
+          ChangeNotifierProvider<SipManager>.value(
+            value: sip,
+            child: const MaterialApp(home: DialpadScreen()),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.textContaining('Cuộc gọi gần nhất — Media:'), findsNothing);
+        expect(find.textContaining('RTP TX/RX:'), findsNothing);
+        expect(find.textContaining('candidate-pair'), findsNothing);
+
+        // Test InCallScreen
+        await tester.pumpWidget(
+          ChangeNotifierProvider<SipManager>.value(
+            value: sip,
+            child: const MaterialApp(home: InCallScreen()),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.textContaining('Media: flowing'), findsNothing);
+        expect(find.textContaining('RTP gửi/nhận:'), findsNothing);
+        expect(find.textContaining('Tổng đài Asterisk PJSIP'), findsNothing);
+        expect(find.text('Chuyển cuộc gọi'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      '21. Incoming route không bị push trùng khi nhận nhiều sự kiện CALL_INITIATION',
+      (WidgetTester tester) async {
+        final sip = SipManager();
+        sip.resetForTesting();
+        sip.setHelperForTesting(FakeSIPUAHelper());
+        final navKey = GlobalKey<NavigatorState>();
+        final observer = TestRouteObserver();
+
+        await tester.pumpWidget(
+          ChangeNotifierProvider<SipManager>.value(
+            value: sip,
+            child: MaterialApp(
+              navigatorKey: navKey,
+              navigatorObservers: [observer],
+              initialRoute: '/',
+              routes: {
+                '/': (context) => const Scaffold(body: Text('Dialpad')),
+                '/incoming': (context) =>
+                    const Scaffold(body: Text('IncomingView')),
+                '/in_call': (context) =>
+                    const Scaffold(body: Text('InCallView')),
+              },
+            ),
+          ),
+        );
+        sip.navigatorKey = navKey;
+        await tester.pumpAndSettle();
+
+        final fakeCall = FakeCall(
+          direction: 'INCOMING',
+          id: 'incoming-dup-test',
+        );
+
+        // Sự kiện CALL_INITIATION lần 1
+        sip.callStateChanged(
+          fakeCall,
+          CallState(CallStateEnum.CALL_INITIATION),
+        );
+        await tester.pumpAndSettle();
+        expect(sip.callScreenState, CallScreenState.incoming);
+        expect(find.text('IncomingView'), findsOneWidget);
+
+        final pushCount = observer.pushedRoutes
+            .where((r) => r == '/incoming')
+            .length;
+        expect(pushCount, 1);
+
+        // Sự kiện CALL_INITIATION lần 2 trùng lặp không được push thêm route
+        sip.callStateChanged(
+          fakeCall,
+          CallState(CallStateEnum.CALL_INITIATION),
+        );
+        await tester.pumpAndSettle();
+
+        final pushCountAfter = observer.pushedRoutes
+            .where((r) => r == '/incoming')
+            .length;
+        expect(pushCountAfter, 1);
+      },
+    );
+
+    testWidgets(
+      '22. Answer incoming call thay thế bằng in-call route an toàn không race-condition',
+      (WidgetTester tester) async {
+        final sip = SipManager();
+        sip.resetForTesting();
+        sip.setHelperForTesting(FakeSIPUAHelper());
+        final navKey = GlobalKey<NavigatorState>();
+        final observer = TestRouteObserver();
+
+        await tester.pumpWidget(
+          ChangeNotifierProvider<SipManager>.value(
+            value: sip,
+            child: MaterialApp(
+              navigatorKey: navKey,
+              navigatorObservers: [observer],
+              initialRoute: '/',
+              routes: {
+                '/': (context) => const Scaffold(body: Text('Dialpad')),
+                '/incoming': (context) =>
+                    const Scaffold(body: Text('IncomingView')),
+                '/in_call': (context) =>
+                    const Scaffold(body: Text('InCallView')),
+              },
+            ),
+          ),
+        );
+        sip.navigatorKey = navKey;
+        await tester.pumpAndSettle();
+
+        final fakeCall = FakeCall(
+          direction: 'INCOMING',
+          id: 'race-answer-test',
+        );
+        sip.callStateChanged(
+          fakeCall,
+          CallState(CallStateEnum.CALL_INITIATION),
+        );
+        await tester.pumpAndSettle();
+        expect(sip.callScreenState, CallScreenState.incoming);
+
+        // Người dùng hoặc luồng gọi answer
+        await sip.answerCall();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        // Màn hình in_call phải được hiển thị và callScreenState là inCall (không bị async pop reset về none)
+        expect(sip.callScreenState, CallScreenState.inCall);
+        expect(find.text('InCallView'), findsOneWidget);
+        sip.resetForTesting();
+      },
+    );
+
+    testWidgets(
+      '23. Giao diện softphone không overflow trên màn hình nhỏ (320x480)',
+      (WidgetTester tester) async {
+        tester.view.physicalSize = const Size(320, 480);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        final sip = SipManager();
+        sip.resetForTesting();
+        sip.setHelperForTesting(FakeSIPUAHelper());
+        final fakeCall = FakeCall(direction: 'OUTGOING', id: 'overflow-test');
+        sip.setCurrentCallForTesting(
+          fakeCall,
+          CallState(CallStateEnum.CONFIRMED),
+        );
+
+        // DialpadScreen trên 320x480
+        await tester.pumpWidget(
+          ChangeNotifierProvider<SipManager>.value(
+            value: sip,
+            child: const MaterialApp(home: DialpadScreen()),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+
+        // IncomingCallScreen trên 320x480 (có animation lặp, dùng pump định thời)
+        await tester.pumpWidget(
+          ChangeNotifierProvider<SipManager>.value(
+            value: sip,
+            child: const MaterialApp(home: IncomingCallScreen()),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+        expect(tester.takeException(), isNull);
+
+        // InCallScreen trên 320x480
+        await tester.pumpWidget(
+          ChangeNotifierProvider<SipManager>.value(
+            value: sip,
+            child: const MaterialApp(home: InCallScreen()),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+        expect(tester.takeException(), isNull);
+
+        sip.resetForTesting();
       },
     );
   });

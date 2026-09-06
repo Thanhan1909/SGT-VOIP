@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sip_ua/sip_ua.dart';
@@ -7,7 +8,7 @@ import '../widgets/dtmf_keypad_dialog.dart';
 import '../widgets/transfer_dialog.dart';
 
 class InCallScreen extends StatefulWidget {
-  const InCallScreen({Key? key}) : super(key: key);
+  const InCallScreen({super.key});
 
   @override
   State<InCallScreen> createState() => _InCallScreenState();
@@ -73,13 +74,14 @@ class _InCallScreenState extends State<InCallScreen> {
         state == CallStateEnum.CONFIRMED ||
         state == CallStateEnum.ACCEPTED;
 
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
         _onHangup(sip);
-        return false;
       },
       child: Scaffold(
-        backgroundColor: AppConstants.primaryDark,
+        backgroundColor: AppConstants.backgroundLight,
         body: SafeArea(
           child: Center(
             child: ConstrainedBox(
@@ -102,7 +104,7 @@ class _InCallScreenState extends State<InCallScreen> {
                             children: [
                               const SizedBox(height: 12),
 
-                              // Status Top Label
+                              // Status Top Pill Label
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 16,
@@ -110,18 +112,18 @@ class _InCallScreenState extends State<InCallScreen> {
                                 ),
                                 decoration: BoxDecoration(
                                   color: isConnected
-                                      ? AppConstants.accentGreen.withOpacity(
-                                          0.2,
+                                      ? AppConstants.accentGreen.withValues(
+                                          alpha: 0.15,
                                         )
-                                      : AppConstants.accentAmber.withOpacity(
-                                          0.2,
+                                      : AppConstants.accentAmber.withValues(
+                                          alpha: 0.15,
                                         ),
                                   borderRadius: BorderRadius.circular(20),
                                   border: Border.all(
                                     color: isConnected
                                         ? AppConstants.accentGreen
                                         : AppConstants.accentAmber,
-                                    width: 1,
+                                    width: 1.2,
                                   ),
                                 ),
                                 child: Row(
@@ -138,14 +140,7 @@ class _InCallScreenState extends State<InCallScreen> {
                                     ),
                                     const SizedBox(width: 8),
                                     Text(
-                                      isConnected
-                                          ? (sip.isOnHold
-                                                ? 'Đang tạm giữ máy'
-                                                : 'Đang đàm thoại')
-                                          : (call?.direction.toUpperCase() ==
-                                                    'INCOMING'
-                                                ? 'Đang đổ chuông...'
-                                                : 'Đang kết nối...'),
+                                      sip.friendlyCallStatus,
                                       style: TextStyle(
                                         color: isConnected
                                             ? AppConstants.accentGreen
@@ -160,30 +155,29 @@ class _InCallScreenState extends State<InCallScreen> {
 
                               const Spacer(flex: 1),
 
-                              // Remote Caller Avatar / Icon
+                              // Remote Caller Avatar
                               Container(
                                 width: 110,
                                 height: 110,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: AppConstants.cardDark,
+                                  color: AppConstants.surfaceLight,
                                   border: Border.all(
-                                    color: Colors.white24,
+                                    color: AppConstants.borderLight,
                                     width: 2,
                                   ),
-                                  boxShadow: [
+                                  boxShadow: const [
                                     BoxShadow(
-                                      color: AppConstants.accentBlue
-                                          .withOpacity(0.2),
-                                      blurRadius: 20,
-                                      spreadRadius: 6,
+                                      color: Color(0x0F000000),
+                                      blurRadius: 16,
+                                      spreadRadius: 4,
                                     ),
                                   ],
                                 ),
                                 child: const Icon(
                                   Icons.person,
                                   size: 58,
-                                  color: Colors.white,
+                                  color: AppConstants.textSecondary,
                                 ),
                               ),
 
@@ -192,24 +186,13 @@ class _InCallScreenState extends State<InCallScreen> {
                               // Remote Caller Number / Name
                               Text(
                                 remoteIdentity,
+                                textAlign: TextAlign.center,
                                 style: const TextStyle(
-                                  color: Colors.white,
+                                  color: AppConstants.textPrimary,
                                   fontSize: 26,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              const SizedBox(height: 4),
-                              const Text(
-                                'Tổng đài Asterisk PJSIP',
-                                style: TextStyle(
-                                  color: AppConstants.textMuted,
-                                  fontSize: 13,
-                                ),
-                              ),
-
-                              const SizedBox(height: 12),
-
-                              _buildDiagnostics(sip),
 
                               const SizedBox(height: 16),
 
@@ -218,9 +201,9 @@ class _InCallScreenState extends State<InCallScreen> {
                                 sip.formattedDuration,
                                 style: TextStyle(
                                   color: isConnected
-                                      ? Colors.white70
-                                      : Colors.white38,
-                                  fontSize: 24,
+                                      ? AppConstants.textPrimary
+                                      : AppConstants.textMuted,
+                                  fontSize: 26,
                                   fontFamily: 'monospace',
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -228,7 +211,7 @@ class _InCallScreenState extends State<InCallScreen> {
 
                               const Spacer(flex: 2),
 
-                              // 6 Action Controls Grid: Mute, Speaker, Keypad, Hold, Transfer
+                              // 5 Action Controls: Mute, Speaker, Keypad, Hold, Transfer
                               Padding(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 8.0,
@@ -236,96 +219,115 @@ class _InCallScreenState extends State<InCallScreen> {
                                 child: Column(
                                   children: [
                                     Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceEvenly,
                                       children: [
-                                        _buildCallControl(
-                                          icon: sip.isMuted
-                                              ? Icons.mic_off
-                                              : Icons.mic,
-                                          label: sip.isMuted
-                                              ? 'Bật Mic'
-                                              : 'Tắt Mic',
-                                          isActive: sip.isMuted,
-                                          onTap: () => sip.toggleMute(),
+                                        Expanded(
+                                          child: _buildCallControl(
+                                            icon: sip.isMuted
+                                                ? Icons.mic_off
+                                                : Icons.mic,
+                                            label: sip.isMuted
+                                                ? 'Bật Mic'
+                                                : 'Tắt Mic',
+                                            isActive: sip.isMuted,
+                                            onTap: () => sip.toggleMute(),
+                                          ),
                                         ),
-                                        _buildCallControl(
-                                          icon: sip.isSpeakerOn
-                                              ? Icons.volume_up
-                                              : Icons.volume_down,
-                                          label: sip.isSpeakerOn
-                                              ? 'Loa Ngoài'
-                                              : 'Loa Trong',
-                                          isActive: sip.isSpeakerOn,
-                                          onTap: () => sip.toggleSpeaker(),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: _buildCallControl(
+                                            icon: sip.isSpeakerOn
+                                                ? Icons.volume_up
+                                                : Icons.volume_down,
+                                            label: kIsWeb
+                                                ? 'Loa (Web)'
+                                                : (sip.isSpeakerOn
+                                                      ? 'Loa Ngoài'
+                                                      : 'Loa Trong'),
+                                            isActive: sip.isSpeakerOn,
+                                            isDisabled: kIsWeb,
+                                            onTap: kIsWeb
+                                                ? () {}
+                                                : () => sip.toggleSpeaker(),
+                                          ),
                                         ),
-                                        _buildCallControl(
-                                          icon: Icons.dialpad,
-                                          label: 'Bàn phím DTMF',
-                                          isActive: false,
-                                          onTap: () {
-                                            showDialog(
-                                              context: context,
-                                              builder: (ctx) =>
-                                                  DtmfKeypadDialog(
-                                                    onTonePressed: (tone) =>
-                                                        sip.sendDTMF(tone),
-                                                  ),
-                                            );
-                                          },
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: _buildCallControl(
+                                            icon: Icons.dialpad,
+                                            label: 'Bàn phím DTMF',
+                                            isActive: false,
+                                            onTap: () {
+                                              showDialog(
+                                                context: context,
+                                                builder: (ctx) =>
+                                                    DtmfKeypadDialog(
+                                                      onTonePressed: (tone) =>
+                                                          sip.sendDTMF(tone),
+                                                    ),
+                                              );
+                                            },
+                                          ),
                                         ),
                                       ],
                                     ),
                                     const SizedBox(height: 16),
                                     Row(
                                       mainAxisAlignment:
-                                          MainAxisAlignment.spaceEvenly,
+                                          MainAxisAlignment.center,
                                       children: [
-                                        _buildCallControl(
-                                          icon: sip.isOnHold
-                                              ? Icons.play_arrow
-                                              : Icons.pause,
-                                          label: sip.isOnHold
-                                              ? 'Tiếp tục'
-                                              : 'Giữ máy',
-                                          isActive: sip.isOnHold,
-                                          onTap: () => sip.toggleHold(),
+                                        SizedBox(
+                                          width: 100,
+                                          child: _buildCallControl(
+                                            icon: sip.isOnHold
+                                                ? Icons.play_arrow
+                                                : Icons.pause,
+                                            label: sip.isOnHold
+                                                ? 'Tiếp tục'
+                                                : 'Giữ máy',
+                                            isActive: sip.isOnHold,
+                                            onTap: () => sip.toggleHold(),
+                                          ),
                                         ),
-                                        _buildCallControl(
-                                          icon: Icons.phone_forwarded,
-                                          label: 'Đá luồng (Transfer)',
-                                          isActive: false,
-                                          highlightColor:
-                                              AppConstants.accentBlue,
-                                          onTap: () {
-                                            showDialog(
-                                              context: context,
-                                              builder: (ctx) => TransferDialog(
-                                                onTransfer: (targetExt) async {
-                                                  final success = await sip
-                                                      .transferCall(targetExt);
-                                                  if (context.mounted) {
-                                                    ScaffoldMessenger.of(
-                                                      context,
-                                                    ).showSnackBar(
-                                                      SnackBar(
-                                                        content: Text(
-                                                          success
-                                                              ? 'Đang chuyển cuộc gọi sang máy nhánh $targetExt...'
-                                                              : 'Lỗi khi chuyển cuộc gọi',
+                                        const SizedBox(width: 16),
+                                        SizedBox(
+                                          width: 100,
+                                          child: _buildCallControl(
+                                            icon: Icons.phone_forwarded,
+                                            label: 'Chuyển cuộc gọi',
+                                            isActive: false,
+                                            onTap: () {
+                                              showDialog(
+                                                context: context,
+                                                builder: (ctx) => TransferDialog(
+                                                  onTransfer: (targetExt) async {
+                                                    final success = await sip
+                                                        .transferCall(
+                                                          targetExt,
+                                                        );
+                                                    if (context.mounted) {
+                                                      ScaffoldMessenger.of(
+                                                        context,
+                                                      ).showSnackBar(
+                                                        SnackBar(
+                                                          content: Text(
+                                                            success
+                                                                ? 'Đang chuyển cuộc gọi sang máy nhánh $targetExt...'
+                                                                : 'Lỗi khi chuyển cuộc gọi',
+                                                          ),
+                                                          backgroundColor:
+                                                              success
+                                                              ? AppConstants
+                                                                    .accentGreen
+                                                              : AppConstants
+                                                                    .accentRed,
                                                         ),
-                                                        backgroundColor: success
-                                                            ? AppConstants
-                                                                  .accentBlue
-                                                            : AppConstants
-                                                                  .accentRed,
-                                                      ),
-                                                    );
-                                                  }
-                                                },
-                                              ),
-                                            );
-                                          },
+                                                      );
+                                                    }
+                                                  },
+                                                ),
+                                              );
+                                            },
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -337,27 +339,34 @@ class _InCallScreenState extends State<InCallScreen> {
 
                               // End Call Red Button
                               Center(
-                                child: GestureDetector(
-                                  onTap: () => _onHangup(sip),
-                                  child: Container(
-                                    width: 72,
-                                    height: 72,
-                                    decoration: BoxDecoration(
-                                      color: AppConstants.accentRed,
-                                      shape: BoxShape.circle,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: AppConstants.accentRed
-                                              .withOpacity(0.4),
-                                          blurRadius: 18,
-                                          spreadRadius: 4,
+                                child: Semantics(
+                                  button: true,
+                                  label: 'Kết thúc cuộc gọi',
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: () => _onHangup(sip),
+                                      borderRadius: BorderRadius.circular(36),
+                                      child: Container(
+                                        width: 72,
+                                        height: 72,
+                                        decoration: const BoxDecoration(
+                                          color: AppConstants.accentRed,
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Color(0x4DE5484D),
+                                              blurRadius: 18,
+                                              spreadRadius: 4,
+                                            ),
+                                          ],
                                         ),
-                                      ],
-                                    ),
-                                    child: const Icon(
-                                      Icons.call_end,
-                                      color: Colors.white,
-                                      size: 36,
+                                        child: const Icon(
+                                          Icons.call_end,
+                                          color: Colors.white,
+                                          size: 36,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -384,84 +393,63 @@ class _InCallScreenState extends State<InCallScreen> {
     required String label,
     required bool isActive,
     required VoidCallback onTap,
-    Color? highlightColor,
+    bool isDisabled = false,
   }) {
-    final activeColor = highlightColor ?? AppConstants.accentAmber;
+    const activeColor = AppConstants.accentAmber;
+    final bgColor = isDisabled
+        ? const Color(0xFFEFE8E1)
+        : (isActive
+              ? activeColor.withValues(alpha: 0.15)
+              : AppConstants.cardLight);
+    final borderColor = isDisabled
+        ? AppConstants.borderLight
+        : (isActive ? activeColor : AppConstants.borderLight);
+    final iconColor = isDisabled
+        ? const Color(0xFFB5ABA2)
+        : (isActive ? activeColor : AppConstants.textPrimary);
+    final textColor = isDisabled
+        ? const Color(0xFFB5ABA2)
+        : (isActive ? activeColor : AppConstants.textPrimary);
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        width: 96,
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: isActive
-              ? activeColor.withOpacity(0.2)
-              : AppConstants.cardDark,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isActive ? activeColor : Colors.white12,
-            width: 1.2,
-          ),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: isActive ? activeColor : Colors.white, size: 26),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: isActive ? activeColor : AppConstants.textMuted,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: isDisabled ? null : onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 68),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: borderColor, width: 1.2),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0A000000),
+                blurRadius: 4,
+                offset: Offset(0, 2),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDiagnostics(SipManager sip) {
-    final mediaOk = sip.mediaState == 'flowing';
-    final color = mediaOk
-        ? AppConstants.accentGreen
-        : sip.mediaState == 'one-way'
-        ? AppConstants.accentRed
-        : AppConstants.accentAmber;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppConstants.surfaceDark,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.55)),
-      ),
-      child: DefaultTextStyle(
-        style: const TextStyle(
-          color: AppConstants.textMuted,
-          fontSize: 11,
-          fontFamily: 'monospace',
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Media: ${sip.mediaState}  ICE: ${sip.iceState}  DTLS: ${sip.dtlsState}',
-              style: TextStyle(color: color, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              'RTP gửi/nhận: ${sip.packetsSent}/${sip.packetsReceived}  Codec: ${sip.negotiatedCodec}',
-            ),
-            const SizedBox(height: 3),
-            Text(
-              sip.selectedCandidatePair,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: iconColor, size: 26),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

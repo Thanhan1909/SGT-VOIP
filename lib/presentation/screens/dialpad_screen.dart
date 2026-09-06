@@ -7,7 +7,7 @@ import '../../core/services/sip_manager.dart';
 import '../widgets/status_indicator.dart';
 
 class DialpadScreen extends StatefulWidget {
-  const DialpadScreen({Key? key}) : super(key: key);
+  const DialpadScreen({super.key});
 
   @override
   State<DialpadScreen> createState() => _DialpadScreenState();
@@ -108,14 +108,14 @@ class _DialpadScreenState extends State<DialpadScreen> {
     final sip = context.watch<SipManager>();
 
     return Scaffold(
-      backgroundColor: AppConstants.primaryDark,
+      backgroundColor: AppConstants.backgroundLight,
       appBar: AppBar(
-        backgroundColor: AppConstants.primaryDark,
+        backgroundColor: AppConstants.surfaceLight,
         elevation: 0,
         title: const Text(
           'SGT Softphone',
           style: TextStyle(
-            color: Colors.white,
+            color: AppConstants.textPrimary,
             fontWeight: FontWeight.bold,
             fontSize: 20,
           ),
@@ -132,7 +132,11 @@ class _DialpadScreenState extends State<DialpadScreen> {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Colors.white70),
+            icon: const Icon(
+              Icons.settings_outlined,
+              color: AppConstants.textPrimary,
+            ),
+            tooltip: 'Cài đặt',
             onPressed: () {
               Navigator.pushNamed(context, '/settings');
             },
@@ -167,9 +171,18 @@ class _DialpadScreenState extends State<DialpadScreen> {
                               vertical: 10,
                             ),
                             decoration: BoxDecoration(
-                              color: AppConstants.surfaceDark,
+                              color: AppConstants.surfaceLight,
                               borderRadius: BorderRadius.circular(18),
-                              border: Border.all(color: Colors.white12),
+                              border: Border.all(
+                                color: AppConstants.borderLight,
+                              ),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x0D000000),
+                                  blurRadius: 6,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
                             ),
                             child: Row(
                               children: [
@@ -180,7 +193,7 @@ class _DialpadScreenState extends State<DialpadScreen> {
                                     showCursor: true,
                                     textAlign: TextAlign.center,
                                     style: const TextStyle(
-                                      color: Colors.white,
+                                      color: AppConstants.textPrimary,
                                       fontSize: 28,
                                       fontWeight: FontWeight.bold,
                                       letterSpacing: 2,
@@ -188,7 +201,7 @@ class _DialpadScreenState extends State<DialpadScreen> {
                                     decoration: const InputDecoration(
                                       hintText: 'Nhập số máy...',
                                       hintStyle: TextStyle(
-                                        color: Colors.white24,
+                                        color: AppConstants.textMuted,
                                         fontSize: 20,
                                         letterSpacing: 0,
                                       ),
@@ -204,7 +217,7 @@ class _DialpadScreenState extends State<DialpadScreen> {
                                       padding: EdgeInsets.all(8.0),
                                       child: Icon(
                                         Icons.backspace_outlined,
-                                        color: AppConstants.textMuted,
+                                        color: AppConstants.textSecondary,
                                         size: 24,
                                       ),
                                     ),
@@ -229,7 +242,7 @@ class _DialpadScreenState extends State<DialpadScreen> {
 
                           const SizedBox(height: 16),
 
-                          // 3x4 Keypad Grid (Standard Rows without viewport overhead)
+                          // 3x4 Keypad Grid
                           _buildKeypadGrid(),
 
                           const SizedBox(height: 20),
@@ -239,56 +252,65 @@ class _DialpadScreenState extends State<DialpadScreen> {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                GestureDetector(
-                                  onTap: sip.isDialing
-                                      ? null
-                                      : () => _makeCall(sip),
-                                  child: Container(
-                                    width: 68,
-                                    height: 68,
-                                    decoration: BoxDecoration(
-                                      color:
-                                          (sip.connectionStatus ==
-                                                  SipConnectionStatus.online &&
-                                              sip.helper.connected &&
-                                              sip.helper.registered &&
-                                              !sip.isDialing)
-                                          ? AppConstants.accentGreen
-                                          : Colors.grey.shade700,
-                                      shape: BoxShape.circle,
-                                      boxShadow: [
-                                        if (sip.connectionStatus ==
-                                                SipConnectionStatus.online &&
-                                            sip.helper.connected &&
-                                            sip.helper.registered &&
-                                            !sip.isDialing)
-                                          BoxShadow(
-                                            color: AppConstants.accentGreen
-                                                .withOpacity(0.4),
-                                            blurRadius: 16,
-                                            spreadRadius: 4,
-                                          ),
-                                      ],
-                                    ),
-                                    child: sip.isDialing
-                                        ? const Center(
-                                            child: SizedBox(
-                                              width: 28,
-                                              height: 28,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 3,
-                                                valueColor:
-                                                    AlwaysStoppedAnimation<
-                                                      Color
-                                                    >(Colors.white),
+                                Semantics(
+                                  button: true,
+                                  label: 'Gọi điện',
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: sip.isDialing
+                                          ? null
+                                          : () => _makeCall(sip),
+                                      borderRadius: BorderRadius.circular(34),
+                                      child: Container(
+                                        width: 68,
+                                        height: 68,
+                                        decoration: BoxDecoration(
+                                          color:
+                                              (sip.connectionStatus ==
+                                                      SipConnectionStatus
+                                                          .online &&
+                                                  sip.helper.connected &&
+                                                  sip.helper.registered &&
+                                                  !sip.isDialing)
+                                              ? AppConstants.accentGreen
+                                              : const Color(0xFFB5ABA2),
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            if (sip.connectionStatus ==
+                                                    SipConnectionStatus
+                                                        .online &&
+                                                sip.helper.connected &&
+                                                sip.helper.registered &&
+                                                !sip.isDialing)
+                                              const BoxShadow(
+                                                color: Color(0x4021A366),
+                                                blurRadius: 16,
+                                                spreadRadius: 4,
                                               ),
-                                            ),
-                                          )
-                                        : const Icon(
-                                            Icons.phone,
-                                            color: Colors.white,
-                                            size: 32,
-                                          ),
+                                          ],
+                                        ),
+                                        child: sip.isDialing
+                                            ? const Center(
+                                                child: SizedBox(
+                                                  width: 28,
+                                                  height: 28,
+                                                  child: CircularProgressIndicator(
+                                                    strokeWidth: 3,
+                                                    valueColor:
+                                                        AlwaysStoppedAnimation<
+                                                          Color
+                                                        >(Colors.white),
+                                                  ),
+                                                ),
+                                              )
+                                            : const Icon(
+                                                Icons.phone,
+                                                color: Colors.white,
+                                                size: 32,
+                                              ),
+                                      ),
+                                    ),
                                   ),
                                 ),
                                 if (sip.isDialing) ...[
@@ -305,31 +327,7 @@ class _DialpadScreenState extends State<DialpadScreen> {
                               ],
                             ),
                           ),
-
                           const SizedBox(height: 16),
-
-                          if (sip.mediaState != 'idle') ...[
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: AppConstants.surfaceDark,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.white12),
-                              ),
-                              child: Text(
-                                'Cuộc gọi gần nhất — Media: ${sip.mediaState}, '
-                                'RTP TX/RX: ${sip.packetsSent}/${sip.packetsReceived}\n'
-                                '${sip.selectedCandidatePair}',
-                                style: const TextStyle(
-                                  color: AppConstants.textMuted,
-                                  fontSize: 11,
-                                  fontFamily: 'monospace',
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                          ],
                         ],
                       ),
                     ),
@@ -375,53 +373,56 @@ class _DialpadScreenState extends State<DialpadScreen> {
   }
 
   Widget _buildKeyButton(String mainText, String subText) {
-    return InkWell(
-      onTap: () => _onKeyPress(mainText),
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppConstants.cardDark,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withOpacity(0.06)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Center(
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 4.0,
-                vertical: 2.0,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _onKeyPress(mainText),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppConstants.cardLight,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppConstants.borderLight),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0D000000),
+                blurRadius: 4,
+                offset: Offset(0, 2),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    mainText,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  if (subText.isNotEmpty)
+            ],
+          ),
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 4.0,
+                  vertical: 2.0,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
                     Text(
-                      subText,
+                      mainText,
                       style: const TextStyle(
-                        color: AppConstants.textMuted,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.2,
+                        color: AppConstants.textPrimary,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                ],
+                    if (subText.isNotEmpty)
+                      Text(
+                        subText,
+                        style: const TextStyle(
+                          color: AppConstants.textSecondary,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -432,10 +433,15 @@ class _DialpadScreenState extends State<DialpadScreen> {
 
   Widget _buildQuickTag(String label, String ext) {
     return ActionChip(
-      backgroundColor: AppConstants.cardDark,
+      backgroundColor: AppConstants.surfaceLight,
+      side: const BorderSide(color: AppConstants.borderLight),
       label: Text(
         label,
-        style: const TextStyle(color: Colors.white70, fontSize: 11),
+        style: const TextStyle(
+          color: AppConstants.textPrimary,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
       ),
       onPressed: () {
         setState(() {

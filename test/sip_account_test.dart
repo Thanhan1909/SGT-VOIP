@@ -86,5 +86,37 @@ void main() {
         expect(prefs.containsKey(AppConstants.keyTurnPassword), isFalse);
       },
     );
+
+    test(
+      'Migration of legacy 8000ms iceGatheringTimeoutMs to 1000ms',
+      () async {
+        SharedPreferences.setMockInitialValues({
+          AppConstants.keyIceGatheringTimeoutMs: 8000,
+          AppConstants.keyExtension: '201',
+        });
+
+        final loadedAccount = await SipAccount.loadFromPrefs();
+        expect(loadedAccount.iceGatheringTimeoutMs, 1000);
+
+        final prefs = await SharedPreferences.getInstance();
+        expect(prefs.getInt(AppConstants.keyIceGatheringTimeoutMs), 1000);
+      },
+    );
+
+    test(
+      'Custom user iceGatheringTimeoutMs is preserved without migration',
+      () async {
+        SharedPreferences.setMockInitialValues({
+          AppConstants.keyIceGatheringTimeoutMs: 2500,
+          AppConstants.keyExtension: '201',
+        });
+
+        final loadedAccount = await SipAccount.loadFromPrefs();
+        expect(loadedAccount.iceGatheringTimeoutMs, 2500);
+
+        final prefs = await SharedPreferences.getInstance();
+        expect(prefs.getInt(AppConstants.keyIceGatheringTimeoutMs), 2500);
+      },
+    );
   });
 }

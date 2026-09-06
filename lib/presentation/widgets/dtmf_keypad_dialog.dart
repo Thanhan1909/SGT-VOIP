@@ -5,8 +5,7 @@ import '../../core/constants/app_constants.dart';
 class DtmfKeypadDialog extends StatelessWidget {
   final Function(String tone) onTonePressed;
 
-  const DtmfKeypadDialog({Key? key, required this.onTonePressed})
-    : super(key: key);
+  const DtmfKeypadDialog({super.key, required this.onTonePressed});
 
   static const List<List<String>> _keys = [
     ['1', '2', '3'],
@@ -18,10 +17,10 @@ class DtmfKeypadDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: AppConstants.surfaceDark,
+      backgroundColor: AppConstants.surfaceLight,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(24),
-        side: const BorderSide(color: Colors.white12),
+        side: const BorderSide(color: AppConstants.borderLight),
       ),
       child: Padding(
         padding: const EdgeInsets.all(20.0),
@@ -34,13 +33,16 @@ class DtmfKeypadDialog extends StatelessWidget {
                 const Text(
                   'Bàn phím DTMF (IVR)',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: AppConstants.textPrimary,
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, color: AppConstants.textMuted),
+                  icon: const Icon(
+                    Icons.close,
+                    color: AppConstants.textSecondary,
+                  ),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ],
@@ -53,27 +55,39 @@ class DtmfKeypadDialog extends StatelessWidget {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: row.map((key) {
-                      return InkWell(
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          onTonePressed(key);
-                        },
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          width: 64,
-                          height: 56,
-                          decoration: BoxDecoration(
-                            color: AppConstants.cardDark,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.white10),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            key,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
+                      return Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            onTonePressed(key);
+                          },
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            width: 64,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: AppConstants.cardLight,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: AppConstants.borderLight,
+                              ),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x0A000000),
+                                  blurRadius: 4,
+                                  offset: Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              key,
+                              style: const TextStyle(
+                                color: AppConstants.textPrimary,
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ),

@@ -4,7 +4,7 @@ import '../../core/constants/app_constants.dart';
 class TransferDialog extends StatefulWidget {
   final Function(String targetExtension) onTransfer;
 
-  const TransferDialog({Key? key, required this.onTransfer}) : super(key: key);
+  const TransferDialog({super.key, required this.onTransfer});
 
   @override
   State<TransferDialog> createState() => _TransferDialogState();
@@ -35,19 +35,19 @@ class _TransferDialogState extends State<TransferDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: AppConstants.surfaceDark,
+      backgroundColor: AppConstants.surfaceLight,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: const BorderSide(color: Colors.white12),
+        side: const BorderSide(color: AppConstants.borderLight),
       ),
-      title: Row(
-        children: const [
-          Icon(Icons.phone_forwarded, color: AppConstants.accentBlue),
+      title: const Row(
+        children: [
+          Icon(Icons.phone_forwarded, color: AppConstants.accentGreen),
           SizedBox(width: 10),
           Text(
-            'Chuyển Cuộc Gọi (Đá Luồng)',
+            'Chuyển Cuộc Gọi',
             style: TextStyle(
-              color: Colors.white,
+              color: AppConstants.textPrimary,
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
@@ -60,29 +60,36 @@ class _TransferDialogState extends State<TransferDialog> {
         children: [
           const Text(
             'Nhập số máy nhánh mục tiêu hoặc chọn máy nhanh bên dưới:',
-            style: TextStyle(color: AppConstants.textMuted, fontSize: 13),
+            style: TextStyle(color: AppConstants.textSecondary, fontSize: 13),
           ),
           const SizedBox(height: 14),
           TextField(
             controller: _extController,
             keyboardType: TextInputType.phone,
             style: const TextStyle(
-              color: Colors.white,
+              color: AppConstants.textPrimary,
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
             decoration: InputDecoration(
               hintText: 'VD: 201 hoặc 203',
-              hintStyle: const TextStyle(color: Colors.white30),
+              hintStyle: const TextStyle(color: AppConstants.textMuted),
               prefixIcon: const Icon(
                 Icons.dialpad,
-                color: AppConstants.accentBlue,
+                color: AppConstants.accentGreen,
               ),
               filled: true,
-              fillColor: AppConstants.cardDark,
-              border: OutlineInputBorder(
+              fillColor: AppConstants.cardLight,
+              enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
+                borderSide: const BorderSide(color: AppConstants.borderLight),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(
+                  color: AppConstants.accentGreen,
+                  width: 1.5,
+                ),
               ),
             ),
           ),
@@ -90,7 +97,7 @@ class _TransferDialogState extends State<TransferDialog> {
           const Text(
             'Chuyển nhanh:',
             style: TextStyle(
-              color: AppConstants.textMuted,
+              color: AppConstants.textSecondary,
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -98,9 +105,11 @@ class _TransferDialogState extends State<TransferDialog> {
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
+            runSpacing: 6,
             children: _quickExtensions.map((item) {
               return ActionChip(
-                backgroundColor: AppConstants.cardDark,
+                backgroundColor: AppConstants.cardLight,
+                side: const BorderSide(color: AppConstants.borderLight),
                 avatar: const Icon(
                   Icons.arrow_forward,
                   size: 14,
@@ -108,10 +117,16 @@ class _TransferDialogState extends State<TransferDialog> {
                 ),
                 label: Text(
                   '${item['name']} (${item['ext']})',
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  style: const TextStyle(
+                    color: AppConstants.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
                 onPressed: () {
-                  _extController.text = item['ext']!;
+                  setState(() {
+                    _extController.text = item['ext']!;
+                  });
                 },
               );
             }).toList(),
@@ -121,17 +136,25 @@ class _TransferDialogState extends State<TransferDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text(
-            'Hủy',
-            style: TextStyle(color: AppConstants.textMuted),
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+            child: Text(
+              'Hủy',
+              style: TextStyle(
+                color: AppConstants.textSecondary,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ),
         ElevatedButton.icon(
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppConstants.accentBlue,
+            backgroundColor: AppConstants.accentGreen,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
             ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           ),
           icon: const Icon(Icons.check, color: Colors.white, size: 18),
           label: const Text(

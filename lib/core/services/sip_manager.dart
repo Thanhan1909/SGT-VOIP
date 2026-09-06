@@ -145,6 +145,9 @@ class SipManager extends ChangeNotifier
   String _negotiatedCodec = 'unknown';
   String _mediaState = 'idle';
   bool _loggedSessionDescriptions = false;
+  bool _isDiagnosticUiActive = false;
+  int _navigationGeneration = 0;
+  final Map<String, Stopwatch> _callStopwatches = {};
 
   // Global navigator key for navigating to incoming / in-call screens
   GlobalKey<NavigatorState>? navigatorKey;
@@ -180,6 +183,66 @@ class SipManager extends ChangeNotifier
   String get dtlsState => _dtlsState;
   String get negotiatedCodec => _negotiatedCodec;
   String get mediaState => _mediaState;
+  bool get isDiagnosticUiActive => _isDiagnosticUiActive;
+  int get navigationGeneration => _navigationGeneration;
+
+  void setDiagnosticUiActive(bool active) {
+    _isDiagnosticUiActive = active;
+    if (active) {
+      notifyListeners();
+    }
+  }
+
+  void _logCallTiming(String? callIdOrTag, String event, {String? extra}) {
+    final id = (callIdOrTag != null && callIdOrTag.isNotEmpty)
+        ? callIdOrTag
+        : 'unknown';
+    final sw = _callStopwatches.putIfAbsent(id, () {
+      final s = Stopwatch()..start();
+      return s;
+    });
+    final elapsedMs = sw.elapsedMilliseconds;
+    final extraStr = extra != null && extra.isNotEmpty ? ' | $extra' : '';
+    _log('TIMING_CALL', '[$id] $event elapsed=${elapsedMs}ms$extraStr');
+  }
+
+  void logIncomingFirstFrame() {
+    final callId = _currentCall?.id ?? 'incoming';
+    _logCallTiming(callId, 'INCOMING_FIRST_FRAME');
+  }
+
+  String get friendlyCallStatus {
+    if (_isDialing) return 'Đang gọi…';
+    final call = _currentCall;
+    final state = _callState?.state;
+    if (call == null && !_isDialing) return 'Cuộc gọi kết thúc';
+    if (_isOnHold) return 'Đang giữ máy';
+    switch (state) {
+      case CallStateEnum.CALL_INITIATION:
+        return call?.direction.toUpperCase() == 'INCOMING'
+            ? 'Đang đổ chuông…'
+            : 'Đang gọi…';
+      case CallStateEnum.CONNECTING:
+        return 'Đang kết nối…';
+      case CallStateEnum.PROGRESS:
+        return 'Đang đổ chuông…';
+      case CallStateEnum.ACCEPTED:
+      case CallStateEnum.CONFIRMED:
+      case CallStateEnum.STREAM:
+        return 'Đang đàm thoại';
+      case CallStateEnum.HOLD:
+        return 'Đang giữ máy';
+      case CallStateEnum.ENDED:
+        return 'Cuộc gọi kết thúc';
+      case CallStateEnum.FAILED:
+        return 'Không thể kết nối';
+      default:
+        return (_callState?.state == CallStateEnum.CONFIRMED ||
+                _callState?.state == CallStateEnum.ACCEPTED)
+            ? 'Đang đàm thoại'
+            : 'Đang kết nối…';
+    }
+  }
 
   void setForceRelayOnly(bool value) {
     _forceRelayOnly = value;
@@ -370,6 +433,8 @@ class SipManager extends ChangeNotifier
 
   Future<CallInitiationResult> makeCall(String targetNumber) async {
     final cleanNumber = targetNumber.trim();
+    _logCallTiming(cleanNumber, 'DIAL_CLICK', extra: 'target=$cleanNumber');
+
     if (cleanNumber.isEmpty) {
       _log('CALL_VALIDATE', 'makeCall rejected: cleanNumber is empty');
       return CallInitiationResult.emptyNumber();
@@ -462,6 +527,11 @@ class SipManager extends ChangeNotifier
             return CallInitiationResult.microphoneDenied();
           }
         }
+        _logCallTiming(
+          cleanNumber,
+          'MIC_CHECK_DONE',
+          extra: 'status=$micStatus',
+        );
       } catch (e) {
         _isDialing = false;
         _pendingTargetNumber = null;
@@ -474,6 +544,7 @@ class SipManager extends ChangeNotifier
     try {
       final targetUri = 'sip:$cleanNumber@${acc.domain}';
       _log('CALL_DIAL', 'Dialing target: $cleanNumber (URI: $targetUri)');
+      _logCallTiming(cleanNumber, 'CALL_HELPER_START', extra: 'uri=$targetUri');
 
       // Only pass the values that differ from SIPUAHelper defaults. Passing
       // buildCallOptions() back as customOptions makes sip_ua 0.6.0 merge two
@@ -491,6 +562,9 @@ class SipManager extends ChangeNotifier
       callOptions['mediaConstraints'] = mediaConstraints;
       _applyIceTransportPolicy(callOptions);
 
+      // Pre-configure earpiece default for outgoing call
+      unawaited(_audioManager.prepareForCall(cleanNumber));
+
       _log('CALL_HELPER', 'Calling _helper.call for $cleanNumber...');
       final started = await _helper.call(
         targetUri,
@@ -498,6 +572,11 @@ class SipManager extends ChangeNotifier
         customOptions: callOptions,
       );
       _log('CALL_HELPER', '_helper.call returned $started for $cleanNumber');
+      _logCallTiming(
+        cleanNumber,
+        'CALL_HELPER_RETURNED',
+        extra: 'started=$started',
+      );
 
       if (!started) {
         _isDialing = false;
@@ -525,6 +604,7 @@ class SipManager extends ChangeNotifier
     if (call != null) {
       try {
         _log('TIMING', '>>> answerCall clicked by user (id=${call.id})');
+        _logCallTiming(call.id, 'ANSWER_CLICK');
         if (!kIsWeb) {
           var micStatus = await Permission.microphone.status;
           if (!micStatus.isGranted) {
@@ -537,7 +617,8 @@ class SipManager extends ChangeNotifier
             }
           }
         }
-        _audioManager.stopAll();
+        unawaited(_audioManager.stopAll());
+        unawaited(_audioManager.ensureDefaultAudioRoute(call.id));
         _log('TIMING', 'Answering call id=${call.id}...');
         final answerOptions = _helper.buildCallOptions(true);
         _applyIceTransportPolicy(answerOptions);
@@ -554,6 +635,11 @@ class SipManager extends ChangeNotifier
   void hangupCall() {
     _isDialing = false;
     _pendingTargetNumber = null;
+    final callId = _currentCall?.id;
+    if (callId != null) {
+      _logCallTiming(callId, 'HANGUP_CLICK');
+      unawaited(_audioManager.resetOnCallEnded(callId));
+    }
     _audioManager.stopAll();
     unawaited(_audioManager.detachRemoteStream());
     _stopCallTimer();
@@ -758,7 +844,9 @@ class SipManager extends ChangeNotifier
               'Codec: $_negotiatedCodec | ICE: $_iceState | DTLS: $_dtlsState | '
               'Media: $_mediaState | Pair: $_selectedCandidatePair',
         );
-        notifyListeners();
+        if (_isDiagnosticUiActive) {
+          notifyListeners();
+        }
       } catch (e) {
         _log('WEBRTC_STATS', 'Collection error: $e');
       }
@@ -946,6 +1034,12 @@ class SipManager extends ChangeNotifier
       'TIMING',
       'callStateChanged: state=${state.state}, origin=${call.direction}, id=${call.id}',
     );
+    _logCallTiming(
+      call.id,
+      'CALL_STATE_${state.state}',
+      extra: 'origin=${call.direction}',
+    );
+
     // Crucial: assign _currentCall and _callState BEFORE any navigation
     _currentCall = call;
     _callState = state;
@@ -957,24 +1051,29 @@ class SipManager extends ChangeNotifier
         _stopCallTimer();
         _resetWebRtcDiagnostics();
         _callDurationSeconds = 0;
+        unawaited(_audioManager.prepareForCall(call.id));
+
         if (call.direction.toUpperCase() == 'INCOMING') {
           _log(
             'CALL_INITIATION',
             '>>> INCOMING INVITE received! Starting ringtone and navigating to incoming call screen.',
           );
-          _audioManager.playRingtone();
+          _logCallTiming(call.id, 'CALL_INITIATION_INCOMING');
+          unawaited(_audioManager.playRingtone());
           _navigateToIncomingCall();
         } else {
           _log(
             'CALL_INITIATION',
             '>>> OUTGOING call initiated (id=${call.id}). Navigating to in-call screen.',
           );
+          _logCallTiming(call.id, 'CALL_INITIATION_OUTGOING');
           _navigateToInCall();
         }
         break;
 
       case CallStateEnum.CONNECTING:
         _log('TIMING', 'Call is CONNECTING (ICE/signaling negotiation)');
+        _logCallTiming(call.id, 'CONNECTING');
         _startWebRtcStatsCollection();
         break;
 
@@ -984,6 +1083,7 @@ class SipManager extends ChangeNotifier
           'WEBRTC_MEDIA',
           'Stream received: origin=${state.originator}, ${audioTracks.length} audio track(s), enabled=${audioTracks.map((track) => track.enabled).toList()}',
         );
+        _logCallTiming(call.id, 'STREAM_ATTACH');
         if (state.originator?.toLowerCase() == 'remote' &&
             state.stream != null &&
             audioTracks.isNotEmpty) {
@@ -996,8 +1096,10 @@ class SipManager extends ChangeNotifier
           'TIMING',
           'Call is PROGRESS (180/183 Ringing), origin=${call.direction}',
         );
+        _logCallTiming(call.id, 'PROGRESS');
+        unawaited(_audioManager.ensureDefaultAudioRoute(call.id));
         if (call.direction.toUpperCase() == 'OUTGOING') {
-          _audioManager.playRingback();
+          unawaited(_audioManager.playRingback());
           _navigateToInCall();
         }
         _startWebRtcStatsCollection();
@@ -1005,7 +1107,9 @@ class SipManager extends ChangeNotifier
 
       case CallStateEnum.ACCEPTED:
         _log('TIMING', '>>> Call ACCEPTED (200 OK received/sent)');
-        _audioManager.stopAll();
+        _logCallTiming(call.id, 'ACCEPTED');
+        unawaited(_audioManager.stopAll());
+        unawaited(_audioManager.ensureDefaultAudioRoute(call.id));
         _startCallTimer();
         _startWebRtcStatsCollection();
         _navigateToInCall();
@@ -1013,7 +1117,9 @@ class SipManager extends ChangeNotifier
 
       case CallStateEnum.CONFIRMED:
         _log('TIMING', '>>> Call CONFIRMED (ACK received/dialog established)');
-        _audioManager.stopAll();
+        _logCallTiming(call.id, 'CONFIRMED');
+        unawaited(_audioManager.stopAll());
+        unawaited(_audioManager.ensureDefaultAudioRoute(call.id));
         _startCallTimer();
         _startWebRtcStatsCollection();
         _navigateToInCall();
@@ -1021,10 +1127,12 @@ class SipManager extends ChangeNotifier
 
       case CallStateEnum.HOLD:
         _isOnHold = true;
+        _logCallTiming(call.id, 'HOLD');
         break;
 
       case CallStateEnum.UNHOLD:
         _isOnHold = false;
+        _logCallTiming(call.id, 'UNHOLD');
         break;
 
       case CallStateEnum.MUTED:
@@ -1041,10 +1149,14 @@ class SipManager extends ChangeNotifier
           'TIMING',
           '>>> Call ${state.state} (origin=${call.direction}, cause=${state.cause})',
         );
+        _logCallTiming(
+          call.id,
+          'CALL_TERMINATED',
+          extra: 'state=${state.state}, cause=${state.cause}',
+        );
         _isDialing = false;
         _pendingTargetNumber = null;
-        _audioManager.stopAll();
-        unawaited(_audioManager.detachRemoteStream());
+        unawaited(_audioManager.resetOnCallEnded(call.id));
         _stopCallTimer();
         _stopWebRtcStatsCollection();
         _callDurationSeconds = 0;
@@ -1101,9 +1213,20 @@ class SipManager extends ChangeNotifier
     );
     if (_callScreenState == CallScreenState.none) {
       _callScreenState = CallScreenState.incoming;
+      final currentGen = ++_navigationGeneration;
+      _logCallTiming(
+        _currentCall?.id ?? 'incoming',
+        'NAV_INCOMING_REQUESTED',
+        extra: 'gen=$currentGen',
+      );
       navigatorKey?.currentState?.pushNamed('/incoming').then((_) {
-        _log('SipManager', 'Incoming call screen popped/closed');
-        _callScreenState = CallScreenState.none;
+        _log(
+          'SipManager',
+          'Incoming call screen popped/closed (gen=$currentGen, current=$_navigationGeneration)',
+        );
+        if (_navigationGeneration == currentGen) {
+          _callScreenState = CallScreenState.none;
+        }
       });
     } else {
       _log(
@@ -1121,16 +1244,38 @@ class SipManager extends ChangeNotifier
     if (_callScreenState == CallScreenState.incoming) {
       _log('SipManager', 'Replacing incoming call screen with in-call screen');
       _callScreenState = CallScreenState.inCall;
+      final currentGen = ++_navigationGeneration;
+      _logCallTiming(
+        _currentCall?.id ?? 'in_call',
+        'NAV_IN_CALL_REPLACE',
+        extra: 'gen=$currentGen',
+      );
       navigatorKey?.currentState?.pushReplacementNamed('/in_call').then((_) {
-        _log('SipManager', 'In-call screen popped/closed');
-        _callScreenState = CallScreenState.none;
+        _log(
+          'SipManager',
+          'In-call screen popped/closed (gen=$currentGen, current=$_navigationGeneration)',
+        );
+        if (_navigationGeneration == currentGen) {
+          _callScreenState = CallScreenState.none;
+        }
       });
     } else if (_callScreenState == CallScreenState.none) {
       _log('SipManager', 'Pushing in-call screen (direct/outgoing)');
       _callScreenState = CallScreenState.inCall;
+      final currentGen = ++_navigationGeneration;
+      _logCallTiming(
+        _currentCall?.id ?? 'in_call',
+        'NAV_IN_CALL_DIRECT',
+        extra: 'gen=$currentGen',
+      );
       navigatorKey?.currentState?.pushNamed('/in_call').then((_) {
-        _log('SipManager', 'In-call screen popped/closed');
-        _callScreenState = CallScreenState.none;
+        _log(
+          'SipManager',
+          'In-call screen popped/closed (gen=$currentGen, current=$_navigationGeneration)',
+        );
+        if (_navigationGeneration == currentGen) {
+          _callScreenState = CallScreenState.none;
+        }
       });
     } else {
       _log(
@@ -1145,6 +1290,7 @@ class SipManager extends ChangeNotifier
       'SipManager',
       'Navigating back to dialpad from state: $_callScreenState',
     );
+    _navigationGeneration++;
     if (_callScreenState != CallScreenState.none) {
       _callScreenState = CallScreenState.none;
       try {
@@ -1190,16 +1336,22 @@ class SipManager extends ChangeNotifier
     _isDialing = false;
     _pendingTargetNumber = null;
     _callScreenState = CallScreenState.none;
+    _navigationGeneration = 0;
     _connectionStatus = SipConnectionStatus.offline;
     _statusMessage = 'Chưa kết nối';
     _reconnectAttempts = 0;
     _hasTerminalAuthError = false;
     _isRegistering = false;
     _isReconfiguring = false;
+    _isDiagnosticUiActive = false;
     _callTimer?.cancel();
     _callTimer = null;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
+    _statsTimer?.cancel();
+    _statsTimer = null;
+    _audioManager.resetState();
+    _callStopwatches.clear();
   }
 
   @visibleForTesting
@@ -1221,5 +1373,13 @@ class SipManager extends ChangeNotifier
   @visibleForTesting
   bool isTerminalRegistrationErrorForTesting(RegistrationState state) {
     return _isTerminalRegistrationError(state);
+  }
+
+  @visibleForTesting
+  int get navigationGenerationForTesting => _navigationGeneration;
+
+  @visibleForTesting
+  void setNavigationGenerationForTesting(int gen) {
+    _navigationGeneration = gen;
   }
 }

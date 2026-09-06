@@ -83,13 +83,28 @@ class SipAccount {
           ? savedTurnUser
           : AppConstants.defaultTurnUsername,
       turnPassword: secureTurnPass,
-      iceGatheringTimeoutMs:
-          prefs.getInt(AppConstants.keyIceGatheringTimeoutMs) ??
-          AppConstants.defaultIceGatheringTimeoutMs,
+      iceGatheringTimeoutMs: await _getAndMigrateIceGatheringTimeout(prefs),
       forceRelayOnly: prefs.getBool(AppConstants.keyForceRelayOnly) ?? false,
       diagnosticLogging:
           prefs.getBool(AppConstants.keyDiagnosticLogging) ?? false,
     );
+  }
+
+  static Future<int> _getAndMigrateIceGatheringTimeout(
+    SharedPreferences prefs,
+  ) async {
+    final rawTimeout = prefs.getInt(AppConstants.keyIceGatheringTimeoutMs);
+    if (rawTimeout == null) {
+      return AppConstants.defaultIceGatheringTimeoutMs;
+    }
+    if (rawTimeout == AppConstants.legacyIceGatheringTimeoutMs) {
+      // Migrate legacy 8000ms default to modern 1000ms default once
+      const migrated = AppConstants.defaultIceGatheringTimeoutMs;
+      await prefs.setInt(AppConstants.keyIceGatheringTimeoutMs, migrated);
+      return migrated;
+    }
+    // Preserve custom value explicitly set by user
+    return rawTimeout;
   }
 
   Future<void> saveToPrefs() async {

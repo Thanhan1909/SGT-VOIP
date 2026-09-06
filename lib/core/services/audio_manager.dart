@@ -15,21 +15,77 @@ class AudioManager {
   final AudioPlayer _ringbackPlayer = AudioPlayer();
   RTCVideoRenderer? _remoteAudioRenderer;
   bool _remoteAudioRendererInitialized = false;
-  late final Uint8List _ringtoneBytes;
-  late final Uint8List _ringbackBytes;
+  Uint8List? _ringtoneBytes;
+  Uint8List? _ringbackBytes;
 
   bool _initialized = false;
   bool _isSpeakerOn = false;
   bool get isSpeakerOn => _isSpeakerOn;
 
+  String? _activeCallId;
+  bool _audioRouteInitializedForCall = false;
+
+  /// Resets audio route to earpiece when preparing for a new call (incoming or outgoing).
+  Future<void> prepareForCall(String? callId) async {
+    _activeCallId = callId;
+    _audioRouteInitializedForCall = false;
+    _isSpeakerOn = false;
+    if (!kIsWeb) {
+      try {
+        await Helper.setSpeakerphoneOn(false);
+      } catch (e) {
+        debugPrint('[AudioManager] prepareForCall error: $e');
+      }
+    }
+  }
+
+  /// Ensures default audio route (earpiece) is applied exactly once per call upon ACCEPTED / CONFIRMED.
+  /// If the user has already explicitly pressed the Speakerphone button, their choice is respected.
+  Future<void> ensureDefaultAudioRoute(String? callId) async {
+    if (callId != null &&
+        _activeCallId == callId &&
+        _audioRouteInitializedForCall) {
+      // Already configured once for this call. Do not override user's manual toggle.
+      return;
+    }
+    _activeCallId = callId;
+    _audioRouteInitializedForCall = true;
+    if (!_isSpeakerOn && !kIsWeb) {
+      try {
+        await Helper.setSpeakerphoneOn(false);
+      } catch (e) {
+        debugPrint('[AudioManager] ensureDefaultAudioRoute error: $e');
+      }
+    }
+  }
+
+  /// Resets audio routing and stops ringtones when call ends or fails.
+  Future<void> resetOnCallEnded([String? callId]) async {
+    if (callId != null && _activeCallId != null && _activeCallId != callId) {
+      return;
+    }
+    _activeCallId = null;
+    _audioRouteInitializedForCall = false;
+    _isSpeakerOn = false;
+    await stopAll();
+    await detachRemoteStream();
+    if (!kIsWeb) {
+      try {
+        await Helper.setSpeakerphoneOn(false);
+      } catch (e) {
+        debugPrint('[AudioManager] resetOnCallEnded error: $e');
+      }
+    }
+  }
+
   Future<void> init() async {
     if (_initialized) return;
-    _ringtoneBytes = _buildWav(
+    _ringtoneBytes ??= _buildWav(
       frequencies: const [853, 960],
       toneSeconds: 1.2,
       totalSeconds: 3,
     );
-    _ringbackBytes = _buildWav(
+    _ringbackBytes ??= _buildWav(
       frequencies: const [440, 480],
       toneSeconds: 1.8,
       totalSeconds: 4,
@@ -47,7 +103,10 @@ class AudioManager {
       await init();
       await _ringbackPlayer.stop();
       await HapticFeedback.vibrate();
-      await _ringtonePlayer.play(BytesSource(_ringtoneBytes));
+      final bytes = _ringtoneBytes;
+      if (bytes != null) {
+        await _ringtonePlayer.play(BytesSource(bytes));
+      }
     } catch (error) {
       debugPrint('[AudioManager] Ringtone warning: $error');
     }
@@ -59,7 +118,10 @@ class AudioManager {
     try {
       await init();
       await _ringtonePlayer.stop();
-      await _ringbackPlayer.play(BytesSource(_ringbackBytes));
+      final bytes = _ringbackBytes;
+      if (bytes != null) {
+        await _ringbackPlayer.play(BytesSource(bytes));
+      }
     } catch (error) {
       debugPrint('[AudioManager] Ringback warning: $error');
     }
@@ -108,6 +170,7 @@ class AudioManager {
   Future<void> setSpeakerphone(bool enabled) async {
     try {
       _isSpeakerOn = enabled;
+      _audioRouteInitializedForCall = true;
       if (!kIsWeb) {
         await Helper.setSpeakerphoneOn(enabled);
       }
@@ -118,6 +181,17 @@ class AudioManager {
 
   Future<void> toggleSpeakerphone() async {
     await setSpeakerphone(!_isSpeakerOn);
+  }
+
+  void resetState() {
+    _activeCallId = null;
+    _audioRouteInitializedForCall = false;
+    _isSpeakerOn = false;
+  }
+
+  @visibleForTesting
+  void resetForTesting() {
+    resetState();
   }
 
   Uint8List _buildWav({

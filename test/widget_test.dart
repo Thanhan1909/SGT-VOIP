@@ -5,6 +5,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_sip_softphone/core/services/sip_manager.dart';
 import 'package:flutter_sip_softphone/main.dart';
+import 'package:sip_ua/sip_ua.dart';
+
+class MockSmokeHelper extends SIPUAHelper {
+  @override
+  bool get connected => false;
+  @override
+  bool get registered => false;
+  @override
+  void stop() {}
+  @override
+  void addSipUaHelperListener(SipUaHelperListener listener) {}
+  @override
+  void removeSipUaHelperListener(SipUaHelperListener listener) {}
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -14,8 +28,14 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
   });
 
+  tearDown(() {
+    SipManager().resetForTesting();
+  });
+
   testWidgets('SGTSoftphoneApp UI smoke test', (WidgetTester tester) async {
     final sipManager = SipManager();
+    sipManager.resetForTesting();
+    sipManager.setHelperForTesting(MockSmokeHelper());
 
     await tester.pumpWidget(
       ChangeNotifierProvider<SipManager>.value(

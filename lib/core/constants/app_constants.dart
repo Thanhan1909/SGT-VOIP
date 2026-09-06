@@ -31,7 +31,9 @@ class AppConstants {
     'SGT_TURN_USERNAME',
   );
   static const String defaultTurnPassword = '';
-  static const int defaultIceGatheringTimeoutMs = 8000;
+  // Set to 1000ms (down from 8000ms) to dramatically reduce call initiation latency
+  static const int defaultIceGatheringTimeoutMs = 1000;
+  static const int legacyIceGatheringTimeoutMs = 8000;
 
   // SharedPreferences Keys
   static const String keyWssUri = 'sip_wss_uri';
@@ -47,13 +49,26 @@ class AppConstants {
   static const String keyForceRelayOnly = 'sip_force_relay_only';
   static const String keyDiagnosticLogging = 'sip_diagnostic_logging';
 
-  // Theme Colors
-  static const Color primaryDark = Color(0xFF121418);
-  static const Color surfaceDark = Color(0xFF1A1E24);
-  static const Color cardDark = Color(0xFF242A32);
-  static const Color accentGreen = Color(0xFF22C55E);
-  static const Color accentRed = Color(0xFFEF4444);
-  static const Color accentBlue = Color(0xFF3B82F6);
-  static const Color accentAmber = Color(0xFFF59E0B);
-  static const Color textMuted = Color(0xFF94A3B8);
+  // Semantic Theme Colors - Warm Light Palette (WCAG AA Compliant)
+  static const Color backgroundLight = Color(0xFFF4E4D3); // Nền be ấm
+  static const Color surfaceLight = Color(0xFFFFF9F2); // Card / Khung nền phụ
+  static const Color cardLight = Color(0xFFFFFFFF); // Khung viền trắng
+  static const Color textPrimary = Color(0xFF2D221C); // Chữ chính
+  static const Color textSecondary = Color(0xFF74675D); // Chữ phụ
+  static const Color textMuted = Color(0xFF8C7D73); // Chữ gợi ý / mờ
+  static const Color borderLight = Color(0xFFE5D5C5); // Viền nhẹ
+  static const Color dividerLight = Color(0xFFEFE2D4); // Kẻ ngang
+
+  // Semantic Action Colors
+  static const Color accentGreen = Color(0xFF21A366); // Nút gọi / Trả lời
+  static const Color accentRed = Color(0xFFE5484D); // Nút gác máy / Từ chối
+  static const Color accentAmber = Color(
+    0xFFC05621,
+  ); // Trạng thái chờ / Cảnh báo
+  static const Color accentBlue = Color(0xFF2563EB); // Chuyển máy / Điểm nhấn
+
+  // Backward compatibility aliases
+  static const Color primaryDark = backgroundLight;
+  static const Color surfaceDark = surfaceLight;
+  static const Color cardDark = surfaceLight;
 }

@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:provider/provider.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/services/sip_manager.dart';
 import '../../data/models/sip_account.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({Key? key}) : super(key: key);
+  const SettingsScreen({super.key});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -140,185 +139,257 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final sip = context.watch<SipManager>();
 
     return Scaffold(
-      backgroundColor: AppConstants.primaryDark,
+      backgroundColor: AppConstants.backgroundLight,
       appBar: AppBar(
-        backgroundColor: AppConstants.primaryDark,
+        backgroundColor: AppConstants.surfaceLight,
         elevation: 0,
         title: const Text(
           'Cài Đặt Tổng Đài SIP',
           style: TextStyle(
-            color: Colors.white,
+            color: AppConstants.textPrimary,
             fontWeight: FontWeight.bold,
             fontSize: 18,
           ),
         ),
+        iconTheme: const IconThemeData(color: AppConstants.textPrimary),
         actions: [
           IconButton(
-            icon: const Icon(Icons.restore, color: Colors.white70),
+            icon: const Icon(Icons.restore, color: AppConstants.textSecondary),
             tooltip: 'Khôi phục mặc định',
             onPressed: _resetDefaults,
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildSectionTitle('Thông tin Tài khoản SIP (PJSIP)'),
+              // Thông tin máy nhánh
+              _buildSectionTitle('THÔNG TIN MÁY NHÁNH'),
               const SizedBox(height: 12),
               _buildTextField(
                 controller: _extController,
-                label: 'SIP Extension / Username',
-                hint: '202',
+                label: 'Số máy nhánh (Extension)',
+                hint: '201',
                 icon: Icons.tag,
-                validator: (v) {
-                  final value = v?.trim() ?? '';
-                  if (value.isEmpty) return 'Vui lòng nhập Extension';
-                  if (!RegExp(r'^[A-Za-z0-9_.+\-]+$').hasMatch(value)) {
-                    return 'Extension chứa ký tự không hợp lệ';
-                  }
-                  return null;
-                },
+                validator: (v) => v!.trim().isEmpty ? 'Nhập extension' : null,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               _buildTextField(
                 controller: _passController,
-                label: 'SIP Password',
-                hint: 'Nhập SIP credential đã được cấp',
+                label: 'Mật khẩu SIP (Password)',
+                hint: '••••••••',
                 icon: Icons.lock_outline,
                 isPassword: true,
                 obscure: _obscurePassword,
                 onToggleObscure: () =>
                     setState(() => _obscurePassword = !_obscurePassword),
-                validator: (v) =>
-                    v!.isEmpty ? 'Vui lòng nhập Mật khẩu SIP' : null,
+                validator: (v) => v!.trim().isEmpty ? 'Nhập password' : null,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               _buildTextField(
                 controller: _nameController,
-                label: 'Tên hiển thị (Caller ID)',
-                hint: 'Nhân viên 202',
+                label: 'Tên hiển thị (Display Name)',
+                hint: 'CSKH 201',
                 icon: Icons.person_outline,
               ),
+
               const SizedBox(height: 24),
 
-              _buildSectionTitle('Máy chủ Asterisk & WebSocket WSS'),
+              // Cấu hình kết nối SIP & WSS
+              _buildSectionTitle('KẾT NỐI TỔNG ĐÀI'),
               const SizedBox(height: 12),
               _buildTextField(
                 controller: _domainController,
-                label: 'SIP Domain / Realm',
-                hint: 'sgtvoip.duckdns.org',
+                label: 'SIP Domain / IP',
+                hint: 'sgt.vn',
                 icon: Icons.domain,
-                validator: (v) => v!.isEmpty ? 'Vui lòng nhập Domain' : null,
+                validator: (v) => v!.trim().isEmpty ? 'Nhập domain' : null,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               _buildTextField(
                 controller: _wssController,
-                label: 'WebSocket Secure URI (WSS)',
-                hint: 'wss://pbx.example.invalid/ws',
-                icon: Icons.cloud_outlined,
-                // Release builds require WSS; ws:// is only accepted by Android
-                // debug network policy for local lab testing.
+                label: 'WSS WebSocket URL',
+                hint: 'wss://pbx.sgt.vn:8089/ws',
+                icon: Icons.alt_route,
                 validator: (v) {
-                  final value = v?.trim() ?? '';
-                  if (value.isEmpty) return 'Vui lòng nhập WSS URI';
-                  final uri = Uri.tryParse(value);
-                  if (uri == null ||
-                      !uri.hasAuthority ||
-                      (uri.scheme != 'wss' && uri.scheme != 'ws')) {
-                    return 'URI phải có dạng wss://host/ws';
-                  }
-                  if (kReleaseMode && uri.scheme != 'wss') {
-                    return 'Bản release chỉ cho phép WSS';
-                  }
-                  if (uri.path != '/ws') {
-                    return 'WSS URI phải kết thúc chính xác bằng /ws';
+                  if (v!.trim().isEmpty) return 'Nhập WSS URI';
+                  if (!v.startsWith('ws://') && !v.startsWith('wss://')) {
+                    return 'URI phải bắt đầu bằng ws:// hoặc wss://';
                   }
                   return null;
                 },
               ),
+
               const SizedBox(height: 24),
 
-              _buildSectionTitle('Cấu hình Xuyên NAT 4G/5G (STUN / TURN)'),
-              const SizedBox(height: 12),
-              _buildTextField(
-                controller: _stunController,
-                label: 'STUN Server URI',
-                hint: 'stun:stun.l.google.com:19302',
-                icon: Icons.alt_route,
-              ),
-              const SizedBox(height: 12),
-              _buildTextField(
-                controller: _turnController,
-                label: 'TURN URI (phân cách bằng dấu phẩy)',
-                hint:
-                    'turn:turn.example.invalid:3478?transport=udp, turns:turn.example.invalid:5349',
-                icon: Icons.swap_calls,
-              ),
-              const SizedBox(height: 12),
-              _buildTextField(
-                controller: _turnUserController,
-                label: 'TURN Username',
-                hint: 'turn-user',
-                icon: Icons.account_circle_outlined,
-              ),
-              const SizedBox(height: 12),
-              _buildTextField(
-                controller: _turnPassController,
-                label: 'TURN Password',
-                hint: 'Nhập credential đã cấp, không dùng mật khẩu mẫu',
-                icon: Icons.key_outlined,
-                isPassword: true,
-                obscure: _obscureTurnPass,
-                onToggleObscure: () =>
-                    setState(() => _obscureTurnPass = !_obscureTurnPass),
-              ),
-              const SizedBox(height: 12),
-              _buildTextField(
-                controller: _iceTimeoutController,
-                label: 'ICE gathering timeout (ms)',
-                hint: '8000',
-                icon: Icons.timer_outlined,
-                validator: (v) {
-                  final timeout = int.tryParse(v?.trim() ?? '');
-                  if (timeout == null || timeout < 1000 || timeout > 30000) {
-                    return 'Nhập giá trị từ 1000 đến 30000 ms';
-                  }
-                  return null;
-                },
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text(
-                  'Chỉ dùng TURN relay (chẩn đoán)',
-                  style: TextStyle(color: Colors.white),
+              // Chẩn đoán kỹ thuật viên (Collapsible section, default collapsed)
+              Container(
+                decoration: BoxDecoration(
+                  color: AppConstants.surfaceLight,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppConstants.borderLight),
                 ),
-                subtitle: const Text(
-                  'Bật để xác minh TURN. Cuộc gọi sẽ thất bại nếu TURN chưa hoạt động.',
-                  style: TextStyle(color: AppConstants.textMuted, fontSize: 12),
+                child: Theme(
+                  data: Theme.of(
+                    context,
+                  ).copyWith(dividerColor: Colors.transparent),
+                  child: ExpansionTile(
+                    title: const Text(
+                      'Chẩn đoán dành cho kỹ thuật viên',
+                      style: TextStyle(
+                        color: AppConstants.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    subtitle: const Text(
+                      'NAT, STUN/TURN, ICE Timeout và Thông số RTP',
+                      style: TextStyle(
+                        color: AppConstants.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                    leading: const Icon(
+                      Icons.build_circle_outlined,
+                      color: AppConstants.accentAmber,
+                    ),
+                    onExpansionChanged: (isExpanded) {
+                      sip.setDiagnosticUiActive(isExpanded);
+                    },
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0,
+                          vertical: 8.0,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (sip.mediaState != 'idle') ...[
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: AppConstants.backgroundLight,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: AppConstants.borderLight,
+                                  ),
+                                ),
+                                child: Text(
+                                  'Trạng thái: Media: ${sip.mediaState} | ICE: ${sip.iceState} | DTLS: ${sip.dtlsState}\n'
+                                  'RTP Gửi/Nhận: ${sip.packetsSent} / ${sip.packetsReceived} | Codec: ${sip.negotiatedCodec}\n'
+                                  'Candidate Pair: ${sip.selectedCandidatePair}',
+                                  style: const TextStyle(
+                                    color: AppConstants.textPrimary,
+                                    fontSize: 11,
+                                    fontFamily: 'monospace',
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                            ],
+                            _buildTextField(
+                              controller: _stunController,
+                              label: 'STUN Server',
+                              hint: 'stun:stun.l.google.com:19302',
+                              icon: Icons.cloud_outlined,
+                            ),
+                            const SizedBox(height: 10),
+                            _buildTextField(
+                              controller: _turnController,
+                              label: 'TURN Server',
+                              hint: 'turn:turn.domain.com:3478',
+                              icon: Icons.swap_calls_outlined,
+                            ),
+                            const SizedBox(height: 10),
+                            _buildTextField(
+                              controller: _turnUserController,
+                              label: 'TURN Username',
+                              hint: 'user',
+                              icon: Icons.badge_outlined,
+                            ),
+                            const SizedBox(height: 10),
+                            _buildTextField(
+                              controller: _turnPassController,
+                              label: 'TURN Password',
+                              hint: '••••••••',
+                              icon: Icons.key_outlined,
+                              isPassword: true,
+                              obscure: _obscureTurnPass,
+                              onToggleObscure: () => setState(
+                                () => _obscureTurnPass = !_obscureTurnPass,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            _buildTextField(
+                              controller: _iceTimeoutController,
+                              label: 'ICE gathering timeout (ms)',
+                              hint: '1000',
+                              icon: Icons.timer_outlined,
+                              validator: (v) {
+                                final timeout = int.tryParse(v?.trim() ?? '');
+                                if (timeout == null ||
+                                    timeout < 500 ||
+                                    timeout > 30000) {
+                                  return 'Nhập giá trị từ 500 đến 30000 ms';
+                                }
+                                return null;
+                              },
+                            ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text(
+                                'Chỉ dùng TURN relay (chẩn đoán)',
+                                style: TextStyle(
+                                  color: AppConstants.textPrimary,
+                                ),
+                              ),
+                              subtitle: const Text(
+                                'Bật để xác minh TURN. Cuộc gọi sẽ thất bại nếu TURN chưa hoạt động.',
+                                style: TextStyle(
+                                  color: AppConstants.textSecondary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              value: _forceRelayOnly,
+                              activeThumbColor: AppConstants.accentAmber,
+                              onChanged: (value) =>
+                                  setState(() => _forceRelayOnly = value),
+                            ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text(
+                                'Ghi log WebRTC chi tiết',
+                                style: TextStyle(
+                                  color: AppConstants.textPrimary,
+                                ),
+                              ),
+                              subtitle: const Text(
+                                'Chỉ bật tạm thời khi chẩn đoán; log có thể chứa IP và số gọi.',
+                                style: TextStyle(
+                                  color: AppConstants.textSecondary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              value: _diagnosticLogging,
+                              activeThumbColor: AppConstants.accentAmber,
+                              onChanged: (value) =>
+                                  setState(() => _diagnosticLogging = value),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                value: _forceRelayOnly,
-                activeColor: AppConstants.accentAmber,
-                onChanged: (value) => setState(() => _forceRelayOnly = value),
               ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text(
-                  'Ghi log WebRTC chi tiết',
-                  style: TextStyle(color: Colors.white),
-                ),
-                subtitle: const Text(
-                  'Chỉ bật tạm thời khi chẩn đoán; log có thể chứa IP và số gọi.',
-                  style: TextStyle(color: AppConstants.textMuted, fontSize: 12),
-                ),
-                value: _diagnosticLogging,
-                activeColor: AppConstants.accentAmber,
-                onChanged: (value) =>
-                    setState(() => _diagnosticLogging = value),
-              ),
+
               const SizedBox(height: 32),
 
               // Save & Re-register button
@@ -327,10 +398,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 height: 52,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppConstants.accentBlue,
+                    backgroundColor: AppConstants.accentGreen,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
+                    elevation: 1,
                   ),
                   icon: _isSaving
                       ? const SizedBox(
@@ -364,7 +436,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 height: 48,
                 child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: AppConstants.accentRed),
+                    side: const BorderSide(
+                      color: AppConstants.accentRed,
+                      width: 1.5,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
@@ -400,7 +475,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Text(
       title,
       style: const TextStyle(
-        color: AppConstants.accentBlue,
+        color: AppConstants.textPrimary,
         fontSize: 14,
         fontWeight: FontWeight.bold,
         letterSpacing: 0.5,
@@ -420,28 +495,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: AppConstants.surfaceDark,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: AppConstants.borderLight),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x08000000),
+            blurRadius: 4,
+            offset: Offset(0, 1),
+          ),
+        ],
       ),
       child: TextFormField(
         controller: controller,
         obscureText: isPassword && obscure,
-        style: const TextStyle(color: Colors.white, fontSize: 15),
+        style: const TextStyle(color: AppConstants.textPrimary, fontSize: 15),
         decoration: InputDecoration(
           labelText: label,
           labelStyle: const TextStyle(
-            color: AppConstants.textMuted,
+            color: AppConstants.textSecondary,
             fontSize: 13,
           ),
           hintText: hint,
-          hintStyle: const TextStyle(color: Colors.white24),
-          prefixIcon: Icon(icon, color: Colors.white54, size: 20),
+          hintStyle: const TextStyle(color: AppConstants.textMuted),
+          prefixIcon: Icon(icon, color: AppConstants.textSecondary, size: 20),
           suffixIcon: isPassword
               ? IconButton(
                   icon: Icon(
                     obscure ? Icons.visibility_off : Icons.visibility,
-                    color: Colors.white54,
+                    color: AppConstants.textSecondary,
                     size: 20,
                   ),
                   onPressed: onToggleObscure,
