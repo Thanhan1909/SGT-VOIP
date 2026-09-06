@@ -68,13 +68,6 @@ jobs:
             *) echo "SGT_WSS_URI must match wss://host/ws"; exit 1 ;;
           esac
 
-      - name: Verify Gradle toolchain
-        run: |
-          cd android
-          ./gradlew --version
-          ./gradlew tasks
-          cd ..
-
       - name: Build Android APK (debug-signed, internal testing only)
         env:
           SGT_WSS_URI: ${{ vars.SGT_WSS_URI }}
@@ -90,6 +83,13 @@ jobs:
 
       - name: Verify APK output file
         run: test -f build/app/outputs/flutter-apk/app-debug.apk
+
+      - name: Verify Gradle toolchain
+        run: |
+          cd android
+          ./gradlew --version
+          ./gradlew tasks
+          cd ..
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
