@@ -7,6 +7,8 @@ import 'package:sip_ua/sip_ua.dart';
 import '../constants/app_constants.dart';
 import '../../data/models/sip_account.dart';
 import 'audio_manager.dart';
+import 'call_coordinator.dart';
+import 'native_call_bridge.dart';
 
 void _log(String tag, String msg) {
   final now = DateTime.now();
@@ -97,13 +99,36 @@ class CallInitiationResult {
 
 class SipManager extends ChangeNotifier
     with WidgetsBindingObserver
-    implements SipUaHelperListener {
+    implements SipUaHelperListener, CallHandlerDelegate {
   static final SipManager _instance = SipManager._internal();
   factory SipManager() => _instance;
   SipManager._internal();
 
   SIPUAHelper _helper = SIPUAHelper();
   final AudioManager _audioManager = AudioManager();
+  CallCoordinator? _callCoordinator;
+
+  CallCoordinator get callCoordinator =>
+      _callCoordinator ??= CallCoordinator(
+        nativeCallBridge: MethodChannelNativeCallBridge(),
+        delegate: this,
+      );
+
+  @visibleForTesting
+  void setCallCoordinatorForTesting(CallCoordinator? coordinator) {
+    _callCoordinator = coordinator;
+    _callCoordinator?.delegate = this;
+  }
+
+  @override
+  bool get hasActiveCall => _currentCall != null;
+
+  @override
+  Future<void> ensureConnected() async {
+    if (_connectionStatus != SipConnectionStatus.online && _account != null) {
+      await register(newAccount: _account);
+    }
+  }
 
   SipAccount? _account;
   SipConnectionStatus _connectionStatus = SipConnectionStatus.offline;
@@ -599,6 +624,7 @@ class SipManager extends ChangeNotifier
     }
   }
 
+  @override
   Future<void> answerCall() async {
     final call = _currentCall;
     if (call != null) {
@@ -632,6 +658,7 @@ class SipManager extends ChangeNotifier
     }
   }
 
+  @override
   void hangupCall() {
     _isDialing = false;
     _pendingTargetNumber = null;
@@ -1062,8 +1089,24 @@ class SipManager extends ChangeNotifier
             '>>> INCOMING INVITE received! Starting ringtone and navigating to incoming call screen.',
           );
           _audioManager.prepareForCall(call.id);
-          _navigateToIncomingCall();
-          _audioManager.playRingtone();
+
+          final isForeground =
+              WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+          final callerNumber = call.remote_identity ?? '';
+          final callerName = 'Extension $callerNumber';
+
+          final autoAnswered = _callCoordinator?.onIncomingCallReceived(
+                callUuid: call.id ?? '',
+                callerName: callerName,
+                callerNumber: callerNumber,
+                isAppForeground: isForeground,
+              ) ??
+              false;
+
+          if (!autoAnswered) {
+            _navigateToIncomingCall();
+            _audioManager.playRingtone();
+          }
         } else {
           _log(
             'CALL_INITIATION',
@@ -1122,6 +1165,7 @@ class SipManager extends ChangeNotifier
       case CallStateEnum.CONFIRMED:
         _log('TIMING', '>>> Call CONFIRMED (ACK received/dialog established)');
         _logCallTiming(call.id, 'CONFIRMED');
+        _callCoordinator?.onCallConfirmed(call.id ?? '');
         _audioManager.ensureDefaultAudioRoute(call.id);
         _audioManager.stopAll();
         _startCallTimer();
@@ -1167,6 +1211,7 @@ class SipManager extends ChangeNotifier
         _callState = null;
         _navigateBackToDialpad();
         _audioManager.resetOnCallEnded(call.id);
+        _callCoordinator?.onCallTerminated(call.id ?? '');
         break;
 
       default:
