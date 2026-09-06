@@ -555,6 +555,7 @@ class SipManager extends ChangeNotifier
     _isDialing = false;
     _pendingTargetNumber = null;
     _audioManager.stopAll();
+    unawaited(_audioManager.detachRemoteStream());
     _stopCallTimer();
     _stopWebRtcStatsCollection();
     _callDurationSeconds = 0;
@@ -981,8 +982,13 @@ class SipManager extends ChangeNotifier
         final audioTracks = state.stream?.getAudioTracks() ?? [];
         _diag(
           'WEBRTC_MEDIA',
-          'Remote stream received: ${audioTracks.length} audio track(s), enabled=${audioTracks.map((track) => track.enabled).toList()}',
+          'Stream received: origin=${state.originator}, ${audioTracks.length} audio track(s), enabled=${audioTracks.map((track) => track.enabled).toList()}',
         );
+        if (state.originator?.toLowerCase() == 'remote' &&
+            state.stream != null &&
+            audioTracks.isNotEmpty) {
+          unawaited(_audioManager.attachRemoteStream(state.stream!));
+        }
         break;
 
       case CallStateEnum.PROGRESS:
@@ -1038,6 +1044,7 @@ class SipManager extends ChangeNotifier
         _isDialing = false;
         _pendingTargetNumber = null;
         _audioManager.stopAll();
+        unawaited(_audioManager.detachRemoteStream());
         _stopCallTimer();
         _stopWebRtcStatsCollection();
         _callDurationSeconds = 0;

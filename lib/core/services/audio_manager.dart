@@ -13,6 +13,8 @@ class AudioManager {
 
   final AudioPlayer _ringtonePlayer = AudioPlayer();
   final AudioPlayer _ringbackPlayer = AudioPlayer();
+  RTCVideoRenderer? _remoteAudioRenderer;
+  bool _remoteAudioRendererInitialized = false;
   late final Uint8List _ringtoneBytes;
   late final Uint8List _ringbackBytes;
 
@@ -67,6 +69,40 @@ class AudioManager {
 
   Future<void> stopAll() async {
     await Future.wait([_ringtonePlayer.stop(), _ringbackPlayer.stop()]);
+  }
+
+  /// Attaches the remote WebRTC stream to a renderer.
+  ///
+  /// On Flutter web, assigning [RTCVideoRenderer.srcObject] creates the hidden
+  /// HTML audio element that actually consumes and plays remote audio. Merely
+  /// receiving an enabled audio track is not enough to produce sound.
+  Future<void> attachRemoteStream(MediaStream stream) async {
+    try {
+      final renderer = _remoteAudioRenderer ??= RTCVideoRenderer();
+      if (!_remoteAudioRendererInitialized) {
+        await renderer.initialize();
+        _remoteAudioRendererInitialized = true;
+      }
+      renderer.srcObject = stream;
+      debugPrint(
+        '[AudioManager] Remote WebRTC stream attached '
+        '(${stream.getAudioTracks().length} audio track(s))',
+      );
+    } catch (error, stack) {
+      debugPrint(
+        '[AudioManager] Failed to attach remote WebRTC stream: '
+        '$error\n$stack',
+      );
+    }
+  }
+
+  Future<void> detachRemoteStream() async {
+    try {
+      _remoteAudioRenderer?.srcObject = null;
+      debugPrint('[AudioManager] Remote WebRTC stream detached');
+    } catch (error) {
+      debugPrint('[AudioManager] Failed to detach remote stream: $error');
+    }
   }
 
   Future<void> setSpeakerphone(bool enabled) async {
