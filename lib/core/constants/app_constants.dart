@@ -2,19 +2,35 @@ import 'package:flutter/material.dart';
 
 class AppConstants {
   // Default Asterisk Infrastructure Settings
-  // WSS qua Cloudflare Tunnel (cập nhật khi tunnel đổi URL)
-  static const String defaultWssUri =
-      'wss://discounts-scheduled-martha-resist.trycloudflare.com/ws';
-  static const String defaultDomain = 'sgtvoip.duckdns.org';
-  static const String defaultExtension = '201';
-  static const String defaultPassword = 'Sale201@123';
-  static const String defaultDisplayName = 'Nhân viên Sale 201';
+  // Production endpoints are injected by CI with --dart-define.  Quick Tunnel
+  // URLs must never be compiled in because they expire whenever cloudflared
+  // restarts.  A blank WSS value makes a bad release fail visibly instead of
+  // silently connecting to the router HTTPS interface.
+  static const String defaultWssUri = String.fromEnvironment('SGT_WSS_URI');
+  // Certificate bypass is never enabled implicitly by a debug build. It must
+  // be explicitly opted into for a local-only debug session and is ignored by
+  // release/profile builds.
+  static const bool allowBadCertificateInDebug = bool.fromEnvironment(
+    'SGT_ALLOW_BAD_CERTIFICATE',
+    defaultValue: false,
+  );
+  static const String defaultDomain = String.fromEnvironment(
+    'SGT_SIP_DOMAIN',
+    defaultValue: 'sgtvoip.duckdns.org',
+  );
+  // Each device must be assigned explicitly. Shipping a shared extension as a
+  // default causes contact replacement and unpredictable incoming calls.
+  static const String defaultExtension = '';
+  static const String defaultPassword = '';
+  static const String defaultDisplayName = '';
 
   // ICE NAT / STUN / TURN Settings
   static const String defaultStunUri = 'stun:stun.l.google.com:19302';
-  static const String defaultTurnUri = 'turn:sgtvoip.duckdns.org:3478';
-  static const String defaultTurnUsername = 'webrtc_user';
-  static const String defaultTurnPassword = 'webrtc_password123';
+  static const String defaultTurnUri = String.fromEnvironment('SGT_TURN_URIS');
+  static const String defaultTurnUsername =
+      String.fromEnvironment('SGT_TURN_USERNAME');
+  static const String defaultTurnPassword = '';
+  static const int defaultIceGatheringTimeoutMs = 8000;
 
   // SharedPreferences Keys
   static const String keyWssUri = 'sip_wss_uri';
@@ -26,6 +42,9 @@ class AppConstants {
   static const String keyTurnUri = 'sip_turn_uri';
   static const String keyTurnUsername = 'sip_turn_username';
   static const String keyTurnPassword = 'sip_turn_password';
+  static const String keyIceGatheringTimeoutMs = 'sip_ice_gathering_timeout_ms';
+  static const String keyForceRelayOnly = 'sip_force_relay_only';
+  static const String keyDiagnosticLogging = 'sip_diagnostic_logging';
 
   // Theme Colors
   static const Color primaryDark = Color(0xFF121418);

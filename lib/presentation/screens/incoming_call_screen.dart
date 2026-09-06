@@ -11,7 +11,8 @@ class IncomingCallScreen extends StatefulWidget {
   State<IncomingCallScreen> createState() => _IncomingCallScreenState();
 }
 
-class _IncomingCallScreenState extends State<IncomingCallScreen> with SingleTickerProviderStateMixin {
+class _IncomingCallScreenState extends State<IncomingCallScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _animController;
   bool _isPopping = false;
 
@@ -84,10 +85,12 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> with SingleTick
                   return SingleChildScrollView(
                     physics: const ClampingScrollPhysics(),
                     child: ConstrainedBox(
-                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                      constraints:
+                          BoxConstraints(minHeight: constraints.maxHeight),
                       child: IntrinsicHeight(
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24.0, vertical: 24.0),
                           child: Column(
                             children: [
                               const SizedBox(height: 20),
@@ -109,10 +112,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> with SingleTick
                                 animation: _animController,
                                 builder: (context, child) {
                                   return Container(
-                                    padding: EdgeInsets.all(18.0 * _animController.value),
+                                    padding: EdgeInsets.all(
+                                        18.0 * _animController.value),
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
-                                      color: AppConstants.accentGreen.withOpacity(0.15 * _animController.value),
+                                      color: AppConstants.accentGreen
+                                          .withOpacity(
+                                              0.15 * _animController.value),
                                     ),
                                     child: Container(
                                       width: 120,
@@ -120,10 +126,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> with SingleTick
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
                                         color: AppConstants.cardDark,
-                                        border: Border.all(color: AppConstants.accentGreen, width: 2),
+                                        border: Border.all(
+                                            color: AppConstants.accentGreen,
+                                            width: 2),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: AppConstants.accentGreen.withOpacity(0.3),
+                                            color: AppConstants.accentGreen
+                                                .withOpacity(0.3),
                                             blurRadius: 20,
                                             spreadRadius: 6,
                                           ),
@@ -163,9 +172,11 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> with SingleTick
 
                               // Accept (Green) and Decline (Red) Action Buttons
                               Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 32.0),
                                 child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     // Decline Button
                                     Column(
@@ -183,19 +194,24 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> with SingleTick
                                               shape: BoxShape.circle,
                                               boxShadow: [
                                                 BoxShadow(
-                                                  color: AppConstants.accentRed.withOpacity(0.4),
+                                                  color: AppConstants.accentRed
+                                                      .withOpacity(0.4),
                                                   blurRadius: 16,
                                                   spreadRadius: 4,
                                                 ),
                                               ],
                                             ),
-                                            child: const Icon(Icons.call_end, color: Colors.white, size: 32),
+                                            child: const Icon(Icons.call_end,
+                                                color: Colors.white, size: 32),
                                           ),
                                         ),
                                         const SizedBox(height: 8),
                                         const Text(
                                           'Từ chối',
-                                          style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600, fontSize: 13),
+                                          style: TextStyle(
+                                              color: Colors.white70,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 13),
                                         ),
                                       ],
                                     ),
@@ -213,19 +229,25 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> with SingleTick
                                               shape: BoxShape.circle,
                                               boxShadow: [
                                                 BoxShadow(
-                                                  color: AppConstants.accentGreen.withOpacity(0.4),
+                                                  color: AppConstants
+                                                      .accentGreen
+                                                      .withOpacity(0.4),
                                                   blurRadius: 16,
                                                   spreadRadius: 4,
                                                 ),
                                               ],
                                             ),
-                                            child: const Icon(Icons.phone, color: Colors.white, size: 32),
+                                            child: const Icon(Icons.phone,
+                                                color: Colors.white, size: 32),
                                           ),
                                         ),
                                         const SizedBox(height: 8),
                                         const Text(
                                           'Trả lời',
-                                          style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600, fontSize: 13),
+                                          style: TextStyle(
+                                              color: Colors.white70,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 13),
                                         ),
                                       ],
                                     ),

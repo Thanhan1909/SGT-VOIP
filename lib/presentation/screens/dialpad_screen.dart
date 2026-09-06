@@ -86,7 +86,8 @@ class _DialpadScreenState extends State<DialpadScreen> {
         elevation: 0,
         title: const Text(
           'SGT Softphone',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
+          style: TextStyle(
+              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
         ),
         actions: [
           Padding(
@@ -121,7 +122,8 @@ class _DialpadScreenState extends State<DialpadScreen> {
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 440),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20.0, vertical: 12.0),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -129,7 +131,8 @@ class _DialpadScreenState extends State<DialpadScreen> {
 
                           // Number Input Display Area
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 10),
                             decoration: BoxDecoration(
                               color: AppConstants.surfaceDark,
                               borderRadius: BorderRadius.circular(18),
@@ -185,9 +188,9 @@ class _DialpadScreenState extends State<DialpadScreen> {
                             spacing: 8,
                             runSpacing: 6,
                             children: [
-                              _buildQuickTag('Odoo CSKH (1001)', '1001'),
-                              _buildQuickTag('Mobile 1 (1002)', '1002'),
-                              _buildQuickTag('Leader (1003)', '1003'),
+                              _buildQuickTag('Odoo CSKH (201)', '201'),
+                              _buildQuickTag('Mobile 1 (202)', '202'),
+                              _buildQuickTag('Leader (203)', '203'),
                             ],
                           ),
 
@@ -206,14 +209,17 @@ class _DialpadScreenState extends State<DialpadScreen> {
                                 width: 68,
                                 height: 68,
                                 decoration: BoxDecoration(
-                                  color: sip.connectionStatus == SipConnectionStatus.online
+                                  color: sip.connectionStatus ==
+                                          SipConnectionStatus.online
                                       ? AppConstants.accentGreen
                                       : Colors.grey.shade700,
                                   shape: BoxShape.circle,
                                   boxShadow: [
-                                    if (sip.connectionStatus == SipConnectionStatus.online)
+                                    if (sip.connectionStatus ==
+                                        SipConnectionStatus.online)
                                       BoxShadow(
-                                        color: AppConstants.accentGreen.withOpacity(0.4),
+                                        color: AppConstants.accentGreen
+                                            .withOpacity(0.4),
                                         blurRadius: 16,
                                         spreadRadius: 4,
                                       ),
@@ -229,6 +235,29 @@ class _DialpadScreenState extends State<DialpadScreen> {
                           ),
 
                           const SizedBox(height: 16),
+
+                          if (sip.mediaState != 'idle') ...[
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: AppConstants.surfaceDark,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.white12),
+                              ),
+                              child: Text(
+                                'Cuộc gọi gần nhất — Media: ${sip.mediaState}, '
+                                'RTP TX/RX: ${sip.packetsSent}/${sip.packetsReceived}\n'
+                                '${sip.selectedCandidatePair}',
+                                style: const TextStyle(
+                                  color: AppConstants.textMuted,
+                                  fontSize: 11,
+                                  fontFamily: 'monospace',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
                         ],
                       ),
                     ),
@@ -294,7 +323,8 @@ class _DialpadScreenState extends State<DialpadScreen> {
           child: FittedBox(
             fit: BoxFit.scaleDown,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 2.0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 4.0, vertical: 2.0),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -329,7 +359,8 @@ class _DialpadScreenState extends State<DialpadScreen> {
   Widget _buildQuickTag(String label, String ext) {
     return ActionChip(
       backgroundColor: AppConstants.cardDark,
-      label: Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11)),
+      label: Text(label,
+          style: const TextStyle(color: Colors.white70, fontSize: 11)),
       onPressed: () {
         setState(() {
           _numberController.text = ext;

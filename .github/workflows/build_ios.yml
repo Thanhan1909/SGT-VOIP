@@ -1,4 +1,4 @@
-name: Build Android APK + iOS IPA
+name: Validate + Build Mobile Artifacts
 
 on:
   workflow_dispatch:
@@ -8,11 +8,33 @@ on:
       - master
 
 jobs:
+  validate:
+    name: Analyze and test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.1'
+          channel: 'stable'
+          cache: true
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+      - name: Static analysis
+        run: flutter analyze --no-fatal-infos
+      - name: Unit and widget tests
+        run: flutter test
+
   # ================================================
   # JOB 1: BUILD ANDROID APK
   # ================================================
   build-android:
-    name: Build Android APK
+    name: Build installable Android debug APK
+    needs: validate
     runs-on: ubuntu-latest
 
     steps:
@@ -28,28 +50,50 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.x'
+          flutter-version: '3.47.1'
           channel: 'stable'
           cache: true
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build Android APK (release)
-        run: flutter build apk --release
+      - name: Validate runtime endpoint variables
+        env:
+          SGT_WSS_URI: ${{ vars.SGT_WSS_URI }}
+          SGT_SIP_DOMAIN: ${{ vars.SGT_SIP_DOMAIN }}
+        run: |
+          test -n "$SGT_SIP_DOMAIN" || { echo "Missing repository variable SGT_SIP_DOMAIN"; exit 1; }
+          case "$SGT_WSS_URI" in
+            wss://*/ws) ;;
+            *) echo "SGT_WSS_URI must match wss://host/ws"; exit 1 ;;
+          esac
+
+      - name: Build Android APK (debug-signed, internal testing only)
+        env:
+          SGT_WSS_URI: ${{ vars.SGT_WSS_URI }}
+          SGT_SIP_DOMAIN: ${{ vars.SGT_SIP_DOMAIN }}
+          SGT_TURN_URIS: ${{ vars.SGT_TURN_URIS }}
+          SGT_TURN_USERNAME: ${{ vars.SGT_TURN_USERNAME }}
+        run: |
+          flutter build apk --debug \
+            --dart-define=SGT_WSS_URI="$SGT_WSS_URI" \
+            --dart-define=SGT_SIP_DOMAIN="$SGT_SIP_DOMAIN" \
+            --dart-define=SGT_TURN_URIS="$SGT_TURN_URIS" \
+            --dart-define=SGT_TURN_USERNAME="$SGT_TURN_USERNAME"
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SGTSoftphone-Android-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: SGTSoftphone-Android-Debug-APK
+          path: build/app/outputs/flutter-apk/app-debug.apk
           retention-days: 14
 
   # ================================================
   # JOB 2: BUILD iOS IPA
   # ================================================
   build-ios:
-    name: Build iOS IPA
+    name: Build unsigned iOS app bundle
+    needs: validate
     runs-on: macos-latest
 
     steps:
@@ -65,26 +109,45 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.x'
+          flutter-version: '3.47.1'
           channel: 'stable'
           cache: true
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build iOS (No CodeSign)
-        run: flutter build ios --release --no-codesign
-
-      - name: Package IPA for 3uTools / Sideloadly
+      - name: Validate runtime endpoint variables
+        env:
+          SGT_WSS_URI: ${{ vars.SGT_WSS_URI }}
+          SGT_SIP_DOMAIN: ${{ vars.SGT_SIP_DOMAIN }}
         run: |
-          mkdir -p build/ios/ipa/Payload
-          cp -r build/ios/iphoneos/Runner.app build/ios/ipa/Payload/
-          cd build/ios/ipa
-          zip -r SGTSoftphone.ipa Payload
+          test -n "$SGT_SIP_DOMAIN" || { echo "Missing repository variable SGT_SIP_DOMAIN"; exit 1; }
+          case "$SGT_WSS_URI" in
+            wss://*/ws) ;;
+            *) echo "SGT_WSS_URI must match wss://host/ws"; exit 1 ;;
+          esac
 
-      - name: Upload IPA Artifact
+      - name: Build iOS (No CodeSign)
+        env:
+          SGT_WSS_URI: ${{ vars.SGT_WSS_URI }}
+          SGT_SIP_DOMAIN: ${{ vars.SGT_SIP_DOMAIN }}
+          SGT_TURN_URIS: ${{ vars.SGT_TURN_URIS }}
+          SGT_TURN_USERNAME: ${{ vars.SGT_TURN_USERNAME }}
+        run: |
+          flutter build ios --release --no-codesign \
+            --dart-define=SGT_WSS_URI="$SGT_WSS_URI" \
+            --dart-define=SGT_SIP_DOMAIN="$SGT_SIP_DOMAIN" \
+            --dart-define=SGT_TURN_URIS="$SGT_TURN_URIS" \
+            --dart-define=SGT_TURN_USERNAME="$SGT_TURN_USERNAME"
+
+      - name: Package unsigned Runner.app (not an installable signed IPA)
+        run: |
+          cd build/ios/iphoneos
+          zip -r SGTSoftphone-unsigned-app.zip Runner.app
+
+      - name: Upload unsigned app artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SGTSoftphone-iOS-IPA
-          path: build/ios/ipa/SGTSoftphone.ipa
+          name: SGTSoftphone-iOS-Unsigned-App
+          path: build/ios/iphoneos/SGTSoftphone-unsigned-app.zip
           retention-days: 14

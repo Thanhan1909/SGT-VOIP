@@ -86,24 +86,31 @@ class _InCallScreenState extends State<InCallScreen> {
                   return SingleChildScrollView(
                     physics: const ClampingScrollPhysics(),
                     child: ConstrainedBox(
-                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                      constraints:
+                          BoxConstraints(minHeight: constraints.maxHeight),
                       child: IntrinsicHeight(
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20.0, vertical: 16.0),
                           child: Column(
                             children: [
                               const SizedBox(height: 12),
 
                               // Status Top Label
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 6),
                                 decoration: BoxDecoration(
                                   color: isConnected
-                                      ? AppConstants.accentGreen.withOpacity(0.2)
-                                      : AppConstants.accentAmber.withOpacity(0.2),
+                                      ? AppConstants.accentGreen
+                                          .withOpacity(0.2)
+                                      : AppConstants.accentAmber
+                                          .withOpacity(0.2),
                                   borderRadius: BorderRadius.circular(20),
                                   border: Border.all(
-                                    color: isConnected ? AppConstants.accentGreen : AppConstants.accentAmber,
+                                    color: isConnected
+                                        ? AppConstants.accentGreen
+                                        : AppConstants.accentAmber,
                                     width: 1,
                                   ),
                                 ),
@@ -111,19 +118,28 @@ class _InCallScreenState extends State<InCallScreen> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Icon(
-                                      isConnected ? Icons.phone_in_talk : Icons.ring_volume,
+                                      isConnected
+                                          ? Icons.phone_in_talk
+                                          : Icons.ring_volume,
                                       size: 16,
-                                      color: isConnected ? AppConstants.accentGreen : AppConstants.accentAmber,
+                                      color: isConnected
+                                          ? AppConstants.accentGreen
+                                          : AppConstants.accentAmber,
                                     ),
                                     const SizedBox(width: 8),
                                     Text(
                                       isConnected
-                                          ? (sip.isOnHold ? 'Đang tạm giữ máy' : 'Đang đàm thoại')
-                                          : (call?.direction.toUpperCase() == 'INCOMING'
+                                          ? (sip.isOnHold
+                                              ? 'Đang tạm giữ máy'
+                                              : 'Đang đàm thoại')
+                                          : (call?.direction.toUpperCase() ==
+                                                  'INCOMING'
                                               ? 'Đang đổ chuông...'
                                               : 'Đang kết nối...'),
                                       style: TextStyle(
-                                        color: isConnected ? AppConstants.accentGreen : AppConstants.accentAmber,
+                                        color: isConnected
+                                            ? AppConstants.accentGreen
+                                            : AppConstants.accentAmber,
                                         fontSize: 13,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -141,10 +157,12 @@ class _InCallScreenState extends State<InCallScreen> {
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   color: AppConstants.cardDark,
-                                  border: Border.all(color: Colors.white24, width: 2),
+                                  border: Border.all(
+                                      color: Colors.white24, width: 2),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: AppConstants.accentBlue.withOpacity(0.2),
+                                      color: AppConstants.accentBlue
+                                          .withOpacity(0.2),
                                       blurRadius: 20,
                                       spreadRadius: 6,
                                     ),
@@ -179,11 +197,17 @@ class _InCallScreenState extends State<InCallScreen> {
 
                               const SizedBox(height: 12),
 
+                              _buildDiagnostics(sip),
+
+                              const SizedBox(height: 16),
+
                               // Realtime Duration Timer
                               Text(
                                 sip.formattedDuration,
                                 style: TextStyle(
-                                  color: isConnected ? Colors.white70 : Colors.white38,
+                                  color: isConnected
+                                      ? Colors.white70
+                                      : Colors.white38,
                                   fontSize: 24,
                                   fontFamily: 'monospace',
                                   fontWeight: FontWeight.w600,
@@ -194,21 +218,31 @@ class _InCallScreenState extends State<InCallScreen> {
 
                               // 6 Action Controls Grid: Mute, Speaker, Keypad, Hold, Transfer
                               Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 8.0),
                                 child: Column(
                                   children: [
                                     Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceEvenly,
                                       children: [
                                         _buildCallControl(
-                                          icon: sip.isMuted ? Icons.mic_off : Icons.mic,
-                                          label: sip.isMuted ? 'Bật Mic' : 'Tắt Mic',
+                                          icon: sip.isMuted
+                                              ? Icons.mic_off
+                                              : Icons.mic,
+                                          label: sip.isMuted
+                                              ? 'Bật Mic'
+                                              : 'Tắt Mic',
                                           isActive: sip.isMuted,
                                           onTap: () => sip.toggleMute(),
                                         ),
                                         _buildCallControl(
-                                          icon: sip.isSpeakerOn ? Icons.volume_up : Icons.volume_down,
-                                          label: sip.isSpeakerOn ? 'Loa Ngoài' : 'Loa Trong',
+                                          icon: sip.isSpeakerOn
+                                              ? Icons.volume_up
+                                              : Icons.volume_down,
+                                          label: sip.isSpeakerOn
+                                              ? 'Loa Ngoài'
+                                              : 'Loa Trong',
                                           isActive: sip.isSpeakerOn,
                                           onTap: () => sip.toggleSpeaker(),
                                         ),
@@ -219,8 +253,10 @@ class _InCallScreenState extends State<InCallScreen> {
                                           onTap: () {
                                             showDialog(
                                               context: context,
-                                              builder: (ctx) => DtmfKeypadDialog(
-                                                onTonePressed: (tone) => sip.sendDTMF(tone),
+                                              builder: (ctx) =>
+                                                  DtmfKeypadDialog(
+                                                onTonePressed: (tone) =>
+                                                    sip.sendDTMF(tone),
                                               ),
                                             );
                                           },
@@ -229,11 +265,16 @@ class _InCallScreenState extends State<InCallScreen> {
                                     ),
                                     const SizedBox(height: 16),
                                     Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceEvenly,
                                       children: [
                                         _buildCallControl(
-                                          icon: sip.isOnHold ? Icons.play_arrow : Icons.pause,
-                                          label: sip.isOnHold ? 'Tiếp tục' : 'Giữ máy',
+                                          icon: sip.isOnHold
+                                              ? Icons.play_arrow
+                                              : Icons.pause,
+                                          label: sip.isOnHold
+                                              ? 'Tiếp tục'
+                                              : 'Giữ máy',
                                           isActive: sip.isOnHold,
                                           onTap: () => sip.toggleHold(),
                                         ),
@@ -241,22 +282,28 @@ class _InCallScreenState extends State<InCallScreen> {
                                           icon: Icons.phone_forwarded,
                                           label: 'Đá luồng (Transfer)',
                                           isActive: false,
-                                          highlightColor: AppConstants.accentBlue,
+                                          highlightColor:
+                                              AppConstants.accentBlue,
                                           onTap: () {
                                             showDialog(
                                               context: context,
                                               builder: (ctx) => TransferDialog(
                                                 onTransfer: (targetExt) async {
-                                                  final success = await sip.transferCall(targetExt);
+                                                  final success = await sip
+                                                      .transferCall(targetExt);
                                                   if (context.mounted) {
-                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                    ScaffoldMessenger.of(
+                                                            context)
+                                                        .showSnackBar(
                                                       SnackBar(
                                                         content: Text(success
                                                             ? 'Đang chuyển cuộc gọi sang máy nhánh $targetExt...'
                                                             : 'Lỗi khi chuyển cuộc gọi'),
                                                         backgroundColor: success
-                                                            ? AppConstants.accentBlue
-                                                            : AppConstants.accentRed,
+                                                            ? AppConstants
+                                                                .accentBlue
+                                                            : AppConstants
+                                                                .accentRed,
                                                       ),
                                                     );
                                                   }
@@ -285,7 +332,8 @@ class _InCallScreenState extends State<InCallScreen> {
                                       shape: BoxShape.circle,
                                       boxShadow: [
                                         BoxShadow(
-                                          color: AppConstants.accentRed.withOpacity(0.4),
+                                          color: AppConstants.accentRed
+                                              .withOpacity(0.4),
                                           blurRadius: 18,
                                           spreadRadius: 4,
                                         ),
@@ -332,7 +380,8 @@ class _InCallScreenState extends State<InCallScreen> {
         width: 96,
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isActive ? activeColor.withOpacity(0.2) : AppConstants.cardDark,
+          color:
+              isActive ? activeColor.withOpacity(0.2) : AppConstants.cardDark,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isActive ? activeColor : Colors.white12,
@@ -355,6 +404,49 @@ class _InCallScreenState extends State<InCallScreen> {
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDiagnostics(SipManager sip) {
+    final mediaOk = sip.mediaState == 'flowing';
+    final color = mediaOk
+        ? AppConstants.accentGreen
+        : sip.mediaState == 'one-way'
+            ? AppConstants.accentRed
+            : AppConstants.accentAmber;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppConstants.surfaceDark,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.55)),
+      ),
+      child: DefaultTextStyle(
+        style: const TextStyle(
+          color: AppConstants.textMuted,
+          fontSize: 11,
+          fontFamily: 'monospace',
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Media: ${sip.mediaState}  ICE: ${sip.iceState}  DTLS: ${sip.dtlsState}',
+              style: TextStyle(color: color, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 3),
+            Text(
+                'RTP gửi/nhận: ${sip.packetsSent}/${sip.packetsReceived}  Codec: ${sip.negotiatedCodec}'),
+            const SizedBox(height: 3),
+            Text(
+              sip.selectedCandidatePair,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),

@@ -35,7 +35,10 @@ class DtmfKeypadDialog extends StatelessWidget {
               children: [
                 const Text(
                   'Bàn phím DTMF (IVR)',
-                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close, color: AppConstants.textMuted),

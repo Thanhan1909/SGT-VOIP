@@ -23,22 +23,7 @@ class StatusIndicator extends StatelessWidget {
         return AppConstants.accentAmber;
       case SipConnectionStatus.error:
       case SipConnectionStatus.offline:
-      default:
         return AppConstants.accentRed;
-    }
-  }
-
-  IconData get _statusIcon {
-    switch (status) {
-      case SipConnectionStatus.online:
-        return Icons.check_circle_outline;
-      case SipConnectionStatus.connecting:
-      case SipConnectionStatus.registering:
-        return Icons.sync;
-      case SipConnectionStatus.error:
-      case SipConnectionStatus.offline:
-      default:
-        return Icons.error_outline;
     }
   }
 
