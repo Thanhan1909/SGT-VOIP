@@ -102,7 +102,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           diagnosticLogging: _diagnosticLogging,
         );
 
-        await sip.register(newAccount: updatedAccount);
+        await sip.connectWithAccount(updatedAccount);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -247,8 +247,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: Icons.alt_route,
                 validator: (v) {
                   if (v!.trim().isEmpty) return 'Nhập WSS URI';
-                  if (!v.startsWith('ws://') && !v.startsWith('wss://')) {
-                    return 'URI phải bắt đầu bằng ws:// hoặc wss://';
+                  if (!SipAccount.isValidWssUri(v)) {
+                    return 'WSS URI phải có dạng wss://host/ws';
                   }
                   return null;
                 },

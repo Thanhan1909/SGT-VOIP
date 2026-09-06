@@ -53,7 +53,7 @@ void main() {
       'SipAccount saveToPrefs and loadFromPrefs roundtrip with SecureStorage',
       () async {
         final account = SipAccount(
-          wssUri: 'wss://sgtvoip.duckdns.org/ws',
+          wssUri: 'wss://cold-start-test.trycloudflare.com/ws',
           domain: 'sgtvoip.duckdns.org',
           extension: '202',
           password: 'SuperSecretPassword@202',
@@ -73,9 +73,17 @@ void main() {
         final loadedAccount = await SipAccount.loadFromPrefs();
 
         expect(loadedAccount.extension, '202');
+        expect(
+          loadedAccount.wssUri,
+          'wss://cold-start-test.trycloudflare.com/ws',
+        );
+        expect(loadedAccount.domain, 'sgtvoip.duckdns.org');
         expect(loadedAccount.password, 'SuperSecretPassword@202');
         expect(loadedAccount.turnPassword, 'TurnSecretPassword@202');
         expect(loadedAccount.displayName, 'Leader 202');
+        expect(loadedAccount.stunUri, 'stun:stun.l.google.com:19302');
+        expect(loadedAccount.turnUri, 'turn:sgtvoip.duckdns.org:3478');
+        expect(loadedAccount.turnUsername, 'webrtc_user');
         expect(loadedAccount.iceGatheringTimeoutMs, 12000);
         expect(loadedAccount.forceRelayOnly, isTrue);
         expect(loadedAccount.diagnosticLogging, isTrue);

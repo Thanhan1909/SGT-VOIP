@@ -91,19 +91,34 @@ class SipAccount {
 
   static Future<String> _getAndMigrateWssUri(SharedPreferences prefs) async {
     final rawWss = prefs.getString(AppConstants.keyWssUri);
-    // Tự chuyển sang endpoint mới nếu giá trị cũ trống hoặc thuộc *.trycloudflare.com
-    if (rawWss == null ||
-        rawWss.trim().isEmpty ||
-        rawWss.contains('.trycloudflare.com')) {
+    final normalizedWss = rawWss?.trim();
+
+    // Only migrate an absent/invalid legacy value. A valid user-selected
+    // endpoint (including a temporary *.trycloudflare.com Quick Tunnel) must
+    // survive force-quit and cold start unchanged.
+    if (normalizedWss == null ||
+        normalizedWss.isEmpty ||
+        normalizedWss == 'wss://configure-me.invalid/ws' ||
+        !isValidWssUri(normalizedWss)) {
       const newWss = AppConstants.defaultWssUri;
-      if (rawWss != null &&
-          (rawWss.trim().isEmpty || rawWss.contains('.trycloudflare.com'))) {
+      if (rawWss != null) {
         await prefs.setString(AppConstants.keyWssUri, newWss);
       }
       return newWss;
     }
-    // Không ghi đè một WSS custom hợp lệ do người dùng chủ động cấu hình
-    return rawWss;
+
+    if (rawWss != normalizedWss) {
+      await prefs.setString(AppConstants.keyWssUri, normalizedWss);
+    }
+    return normalizedWss;
+  }
+
+  static bool isValidWssUri(String value) {
+    final uri = Uri.tryParse(value.trim());
+    return uri != null &&
+        uri.scheme == 'wss' &&
+        uri.host.isNotEmpty &&
+        uri.path == '/ws';
   }
 
   static Future<int> _getAndMigrateIceGatheringTimeout(
@@ -125,7 +140,16 @@ class SipAccount {
 
   Future<void> saveToPrefs() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(AppConstants.keyWssUri, wssUri);
+    final normalizedWss = wssUri.trim();
+    if (!isValidWssUri(normalizedWss)) {
+      throw ArgumentError.value(
+        wssUri,
+        'wssUri',
+        'WSS URI phải có dạng wss://host/ws',
+      );
+    }
+
+    await prefs.setString(AppConstants.keyWssUri, normalizedWss);
     await prefs.setString(AppConstants.keyDomain, domain);
     await prefs.setString(AppConstants.keyExtension, extension);
     await prefs.setString(AppConstants.keyDisplayName, displayName);
