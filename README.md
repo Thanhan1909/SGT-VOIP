@@ -183,3 +183,27 @@ trong màn hình Settings để lưu vào Keystore/Keychain.
 3. **Thử nghiệm Đá luồng (Call Transfer)**:
    - Trong khi đang đàm thoại giữa Flutter (202) và Odoo (201), trên App Flutter bấm nút **Đá luồng (Transfer)**.
    - Nhập số máy Leader `203` và bấm **Chuyển Ngay** $\rightarrow$ Asterisk sẽ tự động chuyển tiếp luồng cuộc gọi sang máy `203`.
+
+---
+
+## 📦 Đóng Gói CI & Cài Đặt Bản Build (Android & iOS)
+
+Quy trình CI trên GitHub Actions tự động kiểm thử và tạo các artifact:
+
+### 1. Android APK (`SGTSoftphone-Android-Debug-APK`)
+- **Đường dẫn artifact:** `build/app/outputs/flutter-apk/app-debug.apk`
+- **Mục đích:** Cài đặt trực tiếp trên thiết bị Android hoặc máy ảo để kiểm thử nội bộ (Internal Testing).
+- **Cấu hình ký:** Sử dụng debug key cho môi trường thử nghiệm; bản release chỉ ký khi có file cấu hình `key.properties` và tuyệt đối không fallback sang debug key.
+
+### 2. iOS Unsigned IPA (`SGTSoftphone-iOS-Unsigned-IPA-for-Sideloadly`)
+- **Đường dẫn artifact:** `build/ios/ipa/SGTSoftphone-unsigned.ipa`
+- **Cấu trúc gói:** Cấu trúc IPA chuẩn chứa thư mục `Payload/Runner.app` (bao gồm `Info.plist`, binary thực thi `Runner` và thư viện dynamic `Frameworks/`).
+
+> [!WARNING]
+> **Lưu ý quan trọng về bản build iOS Unsigned IPA:**
+> 1. **Chưa được Apple ký (Unsigned):** Bản build được tạo bằng `flutter build ios --release --no-codesign`.
+> 2. **Không có Provisioning Profile hợp lệ:** Gói IPA không chứa tệp `embedded.mobileprovision`.
+> 3. **Không cài trực tiếp bằng 3uTools:** Thiết bị iOS sẽ từ chối cài đặt trực tiếp file IPA chưa ký.
+> 4. **Cần Re-sign trước khi cài:** Phải sử dụng công cụ sideloading (như **Sideloadly**, **AltStore**) hoặc Apple Developer Certificate hợp lệ để ký lại (re-sign) trước khi cài đặt lên iPhone/iPad.
+> 5. **Giới hạn tài khoản miễn phí:** Nếu sử dụng Apple ID cá nhân miễn phí để re-sign, chứng chỉ sẽ có thời hạn tối đa 7 ngày và có thể bị giới hạn các quyền entitlement nâng cao (như VoIP background push).
+> 6. **Không phải Production IPA:** Tuyệt đối không tuyên bố hoặc phân phối gói IPA này như một bản phát hành Production chính thức.

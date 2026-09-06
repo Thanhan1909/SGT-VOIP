@@ -68,6 +68,13 @@ jobs:
             *) echo "SGT_WSS_URI must match wss://host/ws"; exit 1 ;;
           esac
 
+      - name: Verify Gradle toolchain
+        run: |
+          cd android
+          ./gradlew --version
+          ./gradlew tasks
+          cd ..
+
       - name: Build Android APK (debug-signed, internal testing only)
         env:
           SGT_WSS_URI: ${{ vars.SGT_WSS_URI }}
@@ -81,6 +88,9 @@ jobs:
             --dart-define=SGT_TURN_URIS="$SGT_TURN_URIS" \
             --dart-define=SGT_TURN_USERNAME="$SGT_TURN_USERNAME"
 
+      - name: Verify APK output file
+        run: test -f build/app/outputs/flutter-apk/app-debug.apk
+
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -89,10 +99,10 @@ jobs:
           retention-days: 14
 
   # ================================================
-  # JOB 2: BUILD iOS IPA
+  # JOB 2: BUILD iOS UNSIGNED IPA
   # ================================================
   build-ios:
-    name: Build unsigned iOS app bundle
+    name: Build unsigned iOS IPA package for sideloading
     needs: validate
     runs-on: macos-latest
 
@@ -127,7 +137,7 @@ jobs:
             *) echo "SGT_WSS_URI must match wss://host/ws"; exit 1 ;;
           esac
 
-      - name: Build iOS (No CodeSign)
+      - name: Build iOS (Release, No CodeSign)
         env:
           SGT_WSS_URI: ${{ vars.SGT_WSS_URI }}
           SGT_SIP_DOMAIN: ${{ vars.SGT_SIP_DOMAIN }}
@@ -140,14 +150,35 @@ jobs:
             --dart-define=SGT_TURN_URIS="$SGT_TURN_URIS" \
             --dart-define=SGT_TURN_USERNAME="$SGT_TURN_USERNAME"
 
-      - name: Package unsigned Runner.app (not an installable signed IPA)
+      - name: Stage Payload directory structure
         run: |
-          cd build/ios/iphoneos
-          zip -r SGTSoftphone-unsigned-app.zip Runner.app
+          rm -rf build/ios/ipa
+          mkdir -p build/ios/ipa/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ios/ipa/Payload/Runner.app
+          test -f build/ios/ipa/Payload/Runner.app/Info.plist
+          test -f build/ios/ipa/Payload/Runner.app/Runner
+          test -d build/ios/ipa/Payload/Runner.app/Frameworks
 
-      - name: Upload unsigned app artifact
+      - name: Package unsigned IPA with ditto
+        run: |
+          cd build/ios/ipa
+          ditto -c -k --sequesterRsrc --keepParent \
+            Payload \
+            SGTSoftphone-unsigned.ipa
+          cd ../../..
+
+      - name: Verify IPA integrity and Payload structure
+        run: |
+          unzip -tq build/ios/ipa/SGTSoftphone-unsigned.ipa
+          archive_contents=$(unzip -l build/ios/ipa/SGTSoftphone-unsigned.ipa)
+          echo "$archive_contents"
+          echo "$archive_contents" | grep -F "Payload/Runner.app/Info.plist" || { echo "Missing Payload/Runner.app/Info.plist"; exit 1; }
+          echo "$archive_contents" | grep -F "Payload/Runner.app/Runner" || { echo "Missing Payload/Runner.app/Runner"; exit 1; }
+          echo "$archive_contents" | grep -F "Payload/Runner.app/Frameworks/" || { echo "Missing Payload/Runner.app/Frameworks/"; exit 1; }
+
+      - name: Upload unsigned IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SGTSoftphone-iOS-Unsigned-App
-          path: build/ios/iphoneos/SGTSoftphone-unsigned-app.zip
+          name: SGTSoftphone-iOS-Unsigned-IPA-for-Sideloadly
+          path: build/ios/ipa/SGTSoftphone-unsigned.ipa
           retention-days: 14
