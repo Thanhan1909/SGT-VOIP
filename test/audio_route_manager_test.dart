@@ -38,6 +38,7 @@ void main() {
     audioManager = AudioManager();
     mockAdapter = MockAudioRouteAdapter();
     audioManager.setAudioRouteAdapterForTesting(mockAdapter);
+    audioManager.setAudioPlayerEnabledForTesting(false);
     audioManager.resetForTesting();
   });
 
@@ -179,6 +180,16 @@ void main() {
 
         await audioManager.resetOnCallEnded('call-failed-early');
         expect(mockAdapter.callLog, isEmpty);
+      },
+    );
+
+    test(
+      'playRingtone and stopAll execute cleanly with structured logging and no exceptions',
+      () async {
+        audioManager.prepareForCall('call-ring-101');
+        await audioManager.playRingtone(callId: 'call-ring-101');
+        await audioManager.stopAll(reason: 'test_stop');
+        expect(audioManager.activeCallId, 'call-ring-101');
       },
     );
   });

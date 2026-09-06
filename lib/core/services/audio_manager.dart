@@ -126,6 +126,17 @@ class AudioManager {
     }
   }
 
+  void _logRingtone(String tag, String message, {StackTrace? stackTrace}) {
+    final now = DateTime.now();
+    final ts =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}.${now.millisecond.toString().padLeft(3, '0')}';
+    if (stackTrace != null) {
+      debugPrint('[$ts][$tag] $message\n$stackTrace');
+    } else {
+      debugPrint('[$ts][$tag] $message');
+    }
+  }
+
   Future<void> init() async {
     if (!_audioPlayerEnabled || _initialized) return;
     _ringtoneBytes ??= _buildWav(
@@ -141,16 +152,47 @@ class AudioManager {
     try {
       await _ringtonePlayer.setReleaseMode(ReleaseMode.loop);
       await _ringbackPlayer.setReleaseMode(ReleaseMode.loop);
+
+      if (!kIsWeb) {
+        final ringtoneContext = AudioContext(
+          iOS: AudioContextIOS(
+            category: AVAudioSessionCategory.playback,
+            options: const {
+              AVAudioSessionOptions.mixWithOthers,
+              AVAudioSessionOptions.duckOthers,
+            },
+          ),
+          android: const AudioContextAndroid(
+            isSpeakerphoneOn: false,
+            stayAwake: true,
+            contentType: AndroidContentType.sonification,
+            usageType: AndroidUsageType.notificationRingtone,
+            audioFocus: AndroidAudioFocus.gainTransientMayDuck,
+          ),
+        );
+        await _ringtonePlayer.setAudioContext(ringtoneContext);
+        await _ringbackPlayer.setAudioContext(ringtoneContext);
+      }
+
       _initialized = true;
-      debugPrint(
-        '[AudioManager] Initialized ringtone/ringback and audio routing',
+      _logRingtone(
+        'RINGTONE_INITIALIZED',
+        'Ringtone player and audio context initialized successfully',
       );
-    } catch (e) {
-      debugPrint('[AudioManager] AudioPlayer init warning: $e');
+    } catch (e, stack) {
+      _logRingtone(
+        'RINGTONE_FAILED',
+        'AudioPlayer init error: $e',
+        stackTrace: stack,
+      );
     }
   }
 
-  Future<void> playRingtone() async {
+  Future<void> playRingtone({String? callId}) async {
+    _logRingtone(
+      'RINGTONE_REQUESTED',
+      'Ringtone playback requested (callId: $callId, active: $_activeCallId)',
+    );
     if (!_audioPlayerEnabled) return;
     try {
       await init();
@@ -161,17 +203,30 @@ class AudioManager {
       final bytes = _ringtoneBytes;
       if (bytes != null) {
         await _ringtonePlayer.play(BytesSource(bytes));
+        _logRingtone(
+          'RINGTONE_STARTED',
+          'Ringtone playback started in loop mode (callId: $callId)',
+        );
+      } else {
+        _logRingtone('RINGTONE_FAILED', 'Ringtone bytes buffer is null');
       }
-    } catch (error) {
-      debugPrint('[AudioManager] Ringtone warning: $error');
+    } catch (error, stack) {
+      _logRingtone(
+        'RINGTONE_FAILED',
+        'Ringtone play error: $error',
+        stackTrace: stack,
+      );
     }
   }
 
-  Future<void> stopRingtone() async {
+  Future<void> stopRingtone({String reason = 'manual_stop'}) async {
     if (!_audioPlayerEnabled) return;
     try {
       await _ringtonePlayer.stop();
-    } catch (_) {}
+      _logRingtone('RINGTONE_STOPPED', 'Ringtone stopped: reason=$reason');
+    } catch (e) {
+      _logRingtone('RINGTONE_FAILED', 'Failed to stop ringtone: $e');
+    }
   }
 
   Future<void> playRingback() async {
@@ -195,11 +250,14 @@ class AudioManager {
     } catch (_) {}
   }
 
-  Future<void> stopAll() async {
+  Future<void> stopAll({String reason = 'call_lifecycle'}) async {
     if (!_audioPlayerEnabled) return;
     try {
       await Future.wait([_ringtonePlayer.stop(), _ringbackPlayer.stop()]);
-    } catch (_) {}
+      _logRingtone('RINGTONE_STOPPED', 'All tones stopped: reason=$reason');
+    } catch (e) {
+      _logRingtone('RINGTONE_FAILED', 'Failed to stop all tones: $e');
+    }
   }
 
   /// Attaches the remote WebRTC stream to a renderer.

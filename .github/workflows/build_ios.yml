@@ -178,11 +178,43 @@ jobs:
 
       - name: Package dSYM symbols for crash symbolication
         run: |
+          set -euo pipefail
+          echo "=== Locating dSYM files in build/ios ==="
+          find build/ios -name "*.dSYM" -print
+
+          RUNNER_DSYM=$(find build/ios -name "Runner.app.dSYM" -print -quit)
+          if [ -z "$RUNNER_DSYM" ]; then
+            echo "ERROR: Runner.app.dSYM not found anywhere in build/ios!" >&2
+            exit 1
+          fi
+          echo "Found Runner.app.dSYM at: $RUNNER_DSYM"
+
+          DWARF_BIN="$RUNNER_DSYM/Contents/Resources/DWARF/Runner"
+          if [ ! -f "$DWARF_BIN" ] || [ ! -s "$DWARF_BIN" ]; then
+            echo "ERROR: DWARF binary $DWARF_BIN is missing or empty!" >&2
+            exit 1
+          fi
+
+          echo "=== DWARF UUID Verification ==="
+          dwarfdump --uuid "$RUNNER_DSYM"
+
           mkdir -p build/ios/dSYMs
-          find build/ios/iphoneos -maxdepth 1 -name "*.dSYM" -exec cp -R {} build/ios/dSYMs/ \; || true
+          find build/ios -maxdepth 4 -name "*.dSYM" -not -path "*/dSYMs/*" -exec cp -R {} build/ios/dSYMs/ \;
+
+          echo "=== Staged dSYM Directory Contents ==="
+          ls -la build/ios/dSYMs
+          du -sh build/ios/dSYMs/*
+
           cd build/ios
-          zip -r dSYMs.zip dSYMs/
+          zip -r -q dSYMs.zip dSYMs/
           cd ../..
+
+          DSYM_ZIP_SIZE=$(stat -f%z build/ios/dSYMs.zip 2>/dev/null || stat -c%s build/ios/dSYMs.zip)
+          echo "dSYMs.zip created with size: $DSYM_ZIP_SIZE bytes"
+          if [ "$DSYM_ZIP_SIZE" -le 1000 ]; then
+            echo "ERROR: dSYMs.zip is unexpectedly small ($DSYM_ZIP_SIZE bytes)!" >&2
+            exit 1
+          fi
 
       - name: Upload unsigned IPA artifact (Testing / Sideloadly only)
         uses: actions/upload-artifact@v4

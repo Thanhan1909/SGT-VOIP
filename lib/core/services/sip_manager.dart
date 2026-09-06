@@ -1106,7 +1106,7 @@ class SipManager extends ChangeNotifier
 
           if (!autoAnswered) {
             _navigateToIncomingCall();
-            _audioManager.playRingtone();
+            _audioManager.playRingtone(callId: call.id);
           }
         } else {
           _log(
@@ -1168,7 +1168,7 @@ class SipManager extends ChangeNotifier
         _logCallTiming(call.id, 'CONFIRMED');
         _callCoordinator?.onCallConfirmed(call.id ?? '');
         _audioManager.ensureDefaultAudioRoute(call.id);
-        _audioManager.stopAll();
+        _audioManager.stopAll(reason: 'call_confirmed');
         _startCallTimer();
         _startWebRtcStatsCollection();
         _navigateToInCall();
