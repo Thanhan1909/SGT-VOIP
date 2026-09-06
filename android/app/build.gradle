@@ -1,6 +1,6 @@
 plugins {
     id "com.android.application"
-    id "kotlin-android"
+    id "org.jetbrains.kotlin.android"
     id "dev.flutter.flutter-gradle-plugin"
 }
 
@@ -30,8 +30,8 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace "com.sgt.voip.softphone"
-    compileSdk 36
-    ndkVersion "25.1.8937393"
+    compileSdk flutter.compileSdkVersion
+    ndkVersion flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -48,8 +48,8 @@ android {
 
     defaultConfig {
         applicationId "com.sgt.voip.softphone"
-        minSdkVersion 23
-        targetSdkVersion 34
+        minSdkVersion flutter.minSdkVersion
+        targetSdkVersion flutter.targetSdkVersion
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
     }
