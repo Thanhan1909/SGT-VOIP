@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sip_ua/sip_ua.dart';
 import 'package:sip_ua/src/event_manager/events.dart';
+import 'package:sip_ua/src/map_helper.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import 'package:flutter_sip_softphone/core/services/sip_manager.dart';
@@ -204,23 +206,29 @@ void main() {
       expect(fakeHelper.callInvocationCount, 0);
     });
 
-    test('2. Microphone denied -> không gọi và có lỗi rõ ràng', () async {
-      final sip = SipManager();
-      sip.resetForTesting();
-      final fakeHelper = FakeSIPUAHelper();
-      sip.setHelperForTesting(fakeHelper);
-      sip.setConnectionStatusForTesting(SipConnectionStatus.online);
-      sip.setAccountForTesting(createTestAccount());
+    test(
+      '2. Microphone denied -> không gọi và có lỗi rõ ràng',
+      () async {
+        final sip = SipManager();
+        sip.resetForTesting();
+        final fakeHelper = FakeSIPUAHelper();
+        sip.setHelperForTesting(fakeHelper);
+        sip.setConnectionStatusForTesting(SipConnectionStatus.online);
+        sip.setAccountForTesting(createTestAccount());
 
-      mockMicStatus = PermissionStatus.denied;
+        mockMicStatus = PermissionStatus.denied;
 
-      final result = await sip.makeCall('202');
+        final result = await sip.makeCall('202');
 
-      expect(result.isSuccess, isFalse);
-      expect(result.status, CallInitiationStatus.microphoneDenied);
-      expect(sip.isDialing, isFalse);
-      expect(fakeHelper.callInvocationCount, 0);
-    });
+        expect(result.isSuccess, isFalse);
+        expect(result.status, CallInitiationStatus.microphoneDenied);
+        expect(sip.isDialing, isFalse);
+        expect(fakeHelper.callInvocationCount, 0);
+      },
+      skip: kIsWeb
+          ? 'Web obtains microphone permission through getUserMedia'
+          : false,
+    );
 
     test('3. helper.call trả false -> không navigate và trả failed', () async {
       final sip = SipManager();
@@ -626,6 +634,50 @@ void main() {
 
         expect(sip.reconnectAttempts, 0);
         expect(sip.hasTerminalAuthError, isFalse);
+      },
+    );
+
+    test(
+      '18. Outgoing call chỉ truyền typed overrides tương thích sip_ua MapHelper',
+      () async {
+        final sip = SipManager();
+        sip.resetForTesting();
+        final fakeHelper = FakeSIPUAHelper();
+        Map<String, dynamic>? capturedOptions;
+        fakeHelper.onCall =
+            (
+              target, {
+              voiceonly = false,
+              mediaStream,
+              headers,
+              customOptions,
+            }) async {
+              capturedOptions = customOptions;
+              return true;
+            };
+        sip.setHelperForTesting(fakeHelper);
+        sip.setConnectionStatusForTesting(SipConnectionStatus.online);
+        sip.setAccountForTesting(createTestAccount());
+
+        final result = await sip.makeCall('999');
+
+        expect(result.isSuccess, isTrue);
+        expect(capturedOptions, isNotNull);
+        expect(capturedOptions, isNot(contains('eventHandlers')));
+        expect(capturedOptions, isNot(contains('extraHeaders')));
+        expect(capturedOptions, isNot(contains('rtcOfferConstraints')));
+        expect(capturedOptions!['mediaConstraints'], <String, dynamic>{
+          'audio': true,
+          'video': false,
+        });
+
+        // This is the same merge performed internally by SIPUAHelper.call().
+        // It guards against the LinkedMap<dynamic, dynamic> web regression.
+        final defaults = SIPUAHelper().buildCallOptions(true);
+        expect(
+          () => MapHelper.merge<String>(defaults, capturedOptions!),
+          returnsNormally,
+        );
       },
     );
   });

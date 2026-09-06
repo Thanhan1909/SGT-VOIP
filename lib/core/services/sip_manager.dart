@@ -475,26 +475,19 @@ class SipManager extends ChangeNotifier
       final targetUri = 'sip:$cleanNumber@${acc.domain}';
       _log('CALL_DIAL', 'Dialing target: $cleanNumber (URI: $targetUri)');
 
-      // 2. Strict Voice-only constraints with Google WebRTC DSP filters
-      final mediaConstraints = <String, dynamic>{
-        'audio': {
-          'mandatory': {
-            'googEchoCancellation': true,
-            'googAutoGainControl': true,
-            'googNoiseSuppression': true,
-            'googHighpassFilter': true,
-          },
-          'optional': <dynamic>[],
-        },
-        'video': false,
-      };
+      // Only pass the values that differ from SIPUAHelper defaults. Passing
+      // buildCallOptions() back as customOptions makes sip_ua 0.6.0 merge two
+      // complete option trees recursively. On Flutter web, nested map literals
+      // in that package are LinkedMap<dynamic, dynamic>, which cannot be cast
+      // to Map<String, dynamic> by MapHelper.merge.
+      final mediaConstraints = <String, dynamic>{'audio': true, 'video': false};
 
       // Reset timer and WebRTC diagnostics before initiating
       _stopCallTimer();
       _callDurationSeconds = 0;
       _resetWebRtcDiagnostics();
 
-      final callOptions = _helper.buildCallOptions(true);
+      final callOptions = <String, dynamic>{};
       callOptions['mediaConstraints'] = mediaConstraints;
       _applyIceTransportPolicy(callOptions);
 
