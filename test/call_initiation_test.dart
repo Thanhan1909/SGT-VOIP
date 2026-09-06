@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sip_ua/sip_ua.dart';
+import 'package:sip_ua/src/event_manager/events.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import 'package:flutter_sip_softphone/core/services/sip_manager.dart';
@@ -519,6 +520,112 @@ void main() {
         sip.callStateChanged(fakeCall, CallState(CallStateEnum.ENDED));
         expect(sip.currentCall, isNull);
         expect(sip.callDurationSeconds, 0);
+      },
+    );
+
+    test(
+      '13. REGISTRATION_FAILED với mã 403 Forbidden (Terminal Auth Error) -> ngắt auto-reconnect',
+      () async {
+        final sip = SipManager();
+        sip.resetForTesting();
+        sip.setConnectionStatusForTesting(SipConnectionStatus.connecting);
+
+        // Giả lập Asterisk trả 403 Forbidden do sai mật khẩu SIP
+        final terminalErrorState = RegistrationState(
+          state: RegistrationStateEnum.REGISTRATION_FAILED,
+          cause: ErrorCause(
+            status_code: 403,
+            cause: 'SIP Failure Code',
+            reason_phrase: 'Forbidden',
+          ),
+        );
+
+        sip.registrationStateChanged(terminalErrorState);
+
+        expect(sip.connectionStatus, SipConnectionStatus.error);
+        expect(sip.hasTerminalAuthError, isTrue);
+        expect(sip.statusMessage, contains('Forbidden'));
+      },
+    );
+
+    test(
+      '14. transportStateChanged(CONNECTED) KHÔNG reset reconnectAttempts về 0',
+      () async {
+        final sip = SipManager();
+        sip.resetForTesting();
+        sip.setReconnectAttemptsForTesting(2);
+
+        // Giả lập WebSocket kết nối lại thành công ở lần thử thứ 2
+        sip.transportStateChanged(TransportState(TransportStateEnum.CONNECTED));
+
+        // reconnectAttempts phải được giữ nguyên là 2, KHÔNG bị reset về 0
+        expect(sip.reconnectAttempts, 2);
+        expect(sip.connectionStatus, SipConnectionStatus.registering);
+        expect(sip.statusMessage, 'Đang đăng ký SIP...');
+      },
+    );
+
+    test(
+      '15. REGISTRATION_FAILED với lỗi transient -> dừng lại khi đạt max reconnect attempts',
+      () async {
+        final sip = SipManager();
+        sip.resetForTesting();
+        sip.setReconnectAttemptsForTesting(3);
+
+        // Giả lập lỗi server tạm thời 500
+        final transientErrorState = RegistrationState(
+          state: RegistrationStateEnum.REGISTRATION_FAILED,
+          cause: ErrorCause(
+            status_code: 500,
+            cause: 'Connection Error',
+            reason_phrase: 'Server Error',
+          ),
+        );
+
+        sip.registrationStateChanged(transientErrorState);
+
+        // Đã đạt max attempts (3), phải dừng lại và cập nhật message yêu cầu chạm để thử lại
+        expect(sip.connectionStatus, SipConnectionStatus.error);
+        expect(sip.hasTerminalAuthError, isFalse);
+        expect(sip.statusMessage, contains('Mất kết nối sau 3 lần thử'));
+      },
+    );
+
+    test(
+      '16. RegistrationStateEnum.REGISTERED reset reconnectAttempts và hasTerminalAuthError',
+      () async {
+        final sip = SipManager();
+        sip.resetForTesting();
+        sip.setReconnectAttemptsForTesting(2);
+        sip.setHasTerminalAuthErrorForTesting(true);
+
+        final registeredState = RegistrationState(
+          state: RegistrationStateEnum.REGISTERED,
+        );
+
+        sip.registrationStateChanged(registeredState);
+
+        expect(sip.connectionStatus, SipConnectionStatus.online);
+        expect(sip.reconnectAttempts, 0);
+        expect(sip.hasTerminalAuthError, isFalse);
+      },
+    );
+
+    test(
+      '17. retryRegistration() giải phóng cờ lỗi xác thực và reset số lần thử lại',
+      () async {
+        final sip = SipManager();
+        sip.resetForTesting();
+        sip.setReconnectAttemptsForTesting(3);
+        sip.setHasTerminalAuthErrorForTesting(true);
+        sip.setAccountForTesting(createTestAccount());
+        final fakeHelper = FakeSIPUAHelper();
+        sip.setHelperForTesting(fakeHelper);
+
+        sip.retryRegistration();
+
+        expect(sip.reconnectAttempts, 0);
+        expect(sip.hasTerminalAuthError, isFalse);
       },
     );
   });

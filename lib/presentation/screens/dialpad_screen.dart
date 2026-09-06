@@ -90,7 +90,14 @@ class _DialpadScreenState extends State<DialpadScreen> {
                   textColor: Colors.white,
                   onPressed: () => openAppSettings(),
                 )
-              : null,
+              : (result.status == CallInitiationStatus.unregistered
+                    ? SnackBarAction(
+                        label: 'Cài đặt SIP',
+                        textColor: Colors.white,
+                        onPressed: () =>
+                            Navigator.pushNamed(context, '/settings'),
+                      )
+                    : null),
         ),
       );
     }
@@ -120,7 +127,7 @@ class _DialpadScreenState extends State<DialpadScreen> {
               status: sip.connectionStatus,
               statusText: sip.statusMessage,
               onTap: () {
-                sip.register();
+                sip.retryRegistration();
               },
             ),
           ),

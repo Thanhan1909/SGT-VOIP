@@ -122,6 +122,8 @@ class SipManager extends ChangeNotifier
   int _reconnectAttempts = 0;
   static const int _maxReconnectAttempts = 3;
   bool _isReconfiguring = false;
+  bool _isRegistering = false;
+  bool _hasTerminalAuthError = false;
 
   // WebRTC Observability & Diagnostic metrics
   Timer? _statsTimer;
@@ -160,6 +162,9 @@ class SipManager extends ChangeNotifier
   bool get isOnHold => _isOnHold;
   bool get isSpeakerOn => _audioManager.isSpeakerOn;
   int get callDurationSeconds => _callDurationSeconds;
+  int get reconnectAttempts => _reconnectAttempts;
+  bool get hasTerminalAuthError => _hasTerminalAuthError;
+  bool get isRegistering => _isRegistering;
   bool get forceRelayOnly => _forceRelayOnly;
   int get packetsSent => _packetsSent;
   int get packetsReceived => _packetsReceived;
@@ -209,6 +214,7 @@ class SipManager extends ChangeNotifier
     _log('SipManager', 'didChangeAppLifecycleState: $state');
     if (state == AppLifecycleState.resumed) {
       if (_currentCall == null &&
+          !_hasTerminalAuthError &&
           (!_helper.connected ||
               !_helper.registered ||
               _connectionStatus != SipConnectionStatus.online)) {
@@ -222,29 +228,45 @@ class SipManager extends ChangeNotifier
     }
   }
 
-  Future<void> register({SipAccount? newAccount}) async {
+  Future<void> register({
+    SipAccount? newAccount,
+    bool resetAttempts = false,
+  }) async {
     if (newAccount != null) {
       _account = newAccount;
       _reconnectAttempts = 0;
+      _hasTerminalAuthError = false;
       await _account!.saveToPrefs();
+    } else if (resetAttempts) {
+      _reconnectAttempts = 0;
+      _hasTerminalAuthError = false;
     }
 
-    _account ??= await SipAccount.loadFromPrefs();
-
-    final acc = _account!;
-    if (!_hasRequiredAccountSettings(acc)) {
-      _connectionStatus = SipConnectionStatus.error;
-      _statusMessage = 'Thiếu WSS, domain, extension hoặc mật khẩu SIP';
-      notifyListeners();
+    if (_isRegistering && newAccount == null) {
+      _log(
+        'SipManager',
+        'register() skipped: another registration operation is already in progress',
+      );
       return;
     }
-    _forceRelayOnly = acc.forceRelayOnly;
-    _diagnosticLogging = acc.diagnosticLogging;
-    _connectionStatus = SipConnectionStatus.connecting;
-    _statusMessage = 'Đang kết nối WSS...';
-    notifyListeners();
 
+    _isRegistering = true;
     try {
+      _account ??= await SipAccount.loadFromPrefs();
+
+      final acc = _account!;
+      if (!_hasRequiredAccountSettings(acc)) {
+        _connectionStatus = SipConnectionStatus.error;
+        _statusMessage = 'Thiếu WSS, domain, extension hoặc mật khẩu SIP';
+        notifyListeners();
+        return;
+      }
+      _forceRelayOnly = acc.forceRelayOnly;
+      _diagnosticLogging = acc.diagnosticLogging;
+      _connectionStatus = SipConnectionStatus.connecting;
+      _statusMessage = 'Đang kết nối WSS...';
+      notifyListeners();
+
       final settings = UaSettings();
 
       // Explicitly set transportType to WS (Fixes Null check operator crash in sip_ua)
@@ -314,7 +336,18 @@ class SipManager extends ChangeNotifier
       _statusMessage = 'Lỗi kết nối: $e';
       notifyListeners();
       _scheduleReconnect();
+    } finally {
+      _isRegistering = false;
     }
+  }
+
+  void retryRegistration() {
+    _log('SipManager', 'Manual registration retry triggered');
+    _reconnectAttempts = 0;
+    _hasTerminalAuthError = false;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    register(resetAttempts: true);
   }
 
   Future<void> unregister() async {
@@ -812,6 +845,25 @@ class SipManager extends ChangeNotifier
 
   // ── SipUaHelperListener Callbacks ────────────────────────────────────────
 
+  bool _isTerminalRegistrationError(RegistrationState state) {
+    final cause = state.cause;
+    if (cause == null) return false;
+    final code = cause.status_code;
+    if (code == 401 || code == 403 || code == 404 || code == 407) {
+      return true;
+    }
+    final phrase = (cause.reason_phrase ?? '').toLowerCase();
+    final causeStr = (cause.cause ?? '').toLowerCase();
+    if (phrase.contains('forbidden') ||
+        phrase.contains('unauthorized') ||
+        phrase.contains('not found') ||
+        causeStr.contains('forbidden') ||
+        causeStr.contains('unauthorized')) {
+      return true;
+    }
+    return false;
+  }
+
   @override
   void registrationStateChanged(RegistrationState state) {
     _log(
@@ -821,6 +873,7 @@ class SipManager extends ChangeNotifier
     switch (state.state) {
       case RegistrationStateEnum.REGISTERED:
         _reconnectAttempts = 0;
+        _hasTerminalAuthError = false;
         _connectionStatus = SipConnectionStatus.online;
         _statusMessage = 'Đã đăng ký (${_account?.extension})';
         _reconnectTimer?.cancel();
@@ -832,9 +885,24 @@ class SipManager extends ChangeNotifier
         break;
       case RegistrationStateEnum.REGISTRATION_FAILED:
         _connectionStatus = SipConnectionStatus.error;
-        _statusMessage =
-            'Đăng ký thất bại (${state.cause?.toString() ?? 'Lỗi'})';
-        _scheduleReconnect();
+        if (_isTerminalRegistrationError(state)) {
+          _hasTerminalAuthError = true;
+          _reconnectTimer?.cancel();
+          _reconnectTimer = null;
+          final reason =
+              state.cause?.reason_phrase ??
+              state.cause?.cause ??
+              'Sai tài khoản hoặc mật khẩu';
+          _statusMessage = 'Đăng ký thất bại: $reason';
+          _log(
+            'SipManager',
+            'Terminal registration failure: ${state.cause}. Auto-reconnect aborted to prevent PBX lock.',
+          );
+        } else {
+          _statusMessage =
+              'Đăng ký thất bại (${state.cause?.reason_phrase ?? state.cause?.toString() ?? 'Lỗi'}). Đang thử lại...';
+          _scheduleReconnect();
+        }
         break;
       case RegistrationStateEnum.NONE:
       default:
@@ -846,7 +914,9 @@ class SipManager extends ChangeNotifier
   }
 
   void _scheduleReconnect() {
-    if (_currentCall != null || _isReconfiguring) return;
+    if (_currentCall != null || _isReconfiguring || _hasTerminalAuthError) {
+      return;
+    }
     _reconnectTimer?.cancel();
     if (_reconnectAttempts >= _maxReconnectAttempts) {
       _log(
@@ -854,7 +924,8 @@ class SipManager extends ChangeNotifier
         'Max auto-reconnect attempts reached ($_maxReconnectAttempts).',
       );
       _connectionStatus = SipConnectionStatus.error;
-      _statusMessage = 'Mất kết nối. Chạm biểu tượng để thử lại.';
+      _statusMessage =
+          'Mất kết nối sau $_maxReconnectAttempts lần thử. Chạm biểu tượng để thử lại.';
       notifyListeners();
       return;
     }
@@ -863,7 +934,8 @@ class SipManager extends ChangeNotifier
     _reconnectTimer = Timer(Duration(seconds: delaySeconds), () {
       if (_connectionStatus != SipConnectionStatus.online &&
           _currentCall == null &&
-          !_isReconfiguring) {
+          !_isReconfiguring &&
+          !_hasTerminalAuthError) {
         _reconnectAttempts++;
         _log(
           'SipManager',
@@ -992,7 +1064,9 @@ class SipManager extends ChangeNotifier
     _log('TIMING', 'transportStateChanged: ${state.state}');
     if (_isReconfiguring) return;
     if (state.state == TransportStateEnum.CONNECTED) {
-      _reconnectAttempts = 0;
+      // NOTE: Do NOT reset _reconnectAttempts here!
+      // Transport connection is only the WebSocket layer; SIP registration may still fail.
+      // Resetting _reconnectAttempts here breaks the max retry counter and causes infinite reconnection loops.
       _reconnectTimer?.cancel();
       _reconnectTimer = null;
       _connectionStatus = SipConnectionStatus.registering;
@@ -1118,9 +1192,34 @@ class SipManager extends ChangeNotifier
     _callScreenState = CallScreenState.none;
     _connectionStatus = SipConnectionStatus.offline;
     _statusMessage = 'Chưa kết nối';
+    _reconnectAttempts = 0;
+    _hasTerminalAuthError = false;
+    _isRegistering = false;
+    _isReconfiguring = false;
     _callTimer?.cancel();
     _callTimer = null;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
+  }
+
+  @visibleForTesting
+  void setReconnectAttemptsForTesting(int attempts) {
+    _reconnectAttempts = attempts;
+  }
+
+  @visibleForTesting
+  int get reconnectAttemptsForTesting => _reconnectAttempts;
+
+  @visibleForTesting
+  bool get hasTerminalAuthErrorForTesting => _hasTerminalAuthError;
+
+  @visibleForTesting
+  void setHasTerminalAuthErrorForTesting(bool hasError) {
+    _hasTerminalAuthError = hasError;
+  }
+
+  @visibleForTesting
+  bool isTerminalRegistrationErrorForTesting(RegistrationState state) {
+    return _isTerminalRegistrationError(state);
   }
 }
