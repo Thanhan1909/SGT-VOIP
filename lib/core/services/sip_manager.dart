@@ -8,8 +8,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sip_ua/sip_ua.dart';
 import '../constants/app_constants.dart';
 import '../../data/models/sip_account.dart';
+import '../../data/models/call_history_entry.dart';
+import '../../data/repositories/call_history_repository.dart';
 import 'audio_manager.dart';
 import 'call_coordinator.dart';
+import 'call_history_service.dart';
 import 'native_call_bridge.dart';
 import 'push_token_manager.dart';
 
@@ -131,6 +134,30 @@ class SipManager extends ChangeNotifier
   @visibleForTesting
   void setPushTokenManagerForTesting(PushTokenManager manager) {
     _pushTokenManager = manager;
+  }
+
+  CallHistoryService _callHistoryService = CallHistoryService(
+    repository: SharedPrefsCallHistoryRepository(),
+  );
+
+  CallHistoryService get callHistoryService => _callHistoryService;
+
+  @visibleForTesting
+  void setCallHistoryServiceForTesting(CallHistoryService service) {
+    _callHistoryService = service;
+  }
+
+  String _resolveCallUuid(Call call) {
+    try {
+      final dynamic rawCall = call;
+      final dynamic session = rawCall.session;
+      final dynamic req = session?.request;
+      final String? headerUuid = req?.getHeader('X-Call-UUID') as String?;
+      if (headerUuid != null && headerUuid.trim().isNotEmpty) {
+        return headerUuid.trim().toLowerCase();
+      }
+    } catch (_) {}
+    return (call.id ?? '').trim().toLowerCase();
   }
 
   Future<String> _getOrCreateDeviceId() async {
@@ -1189,36 +1216,37 @@ class SipManager extends ChangeNotifier
     switch (state.state) {
       case CallStateEnum.CALL_INITIATION:
         _isDialing = false;
+        final effectiveCallUuid = _resolveCallUuid(call);
+        final isIncoming = call.direction.toUpperCase() == 'INCOMING';
+        final callerNumber = isIncoming
+            ? (call.remote_identity ?? '')
+            : (_pendingTargetNumber ?? call.remote_identity ?? '');
+        final callerName = 'Extension $callerNumber';
         _pendingTargetNumber = null;
         _stopCallTimer();
         _resetWebRtcDiagnostics();
         _callDurationSeconds = 0;
-        if (call.direction.toUpperCase() == 'INCOMING') {
+
+        _callHistoryService.recordCallInitiation(
+          correlationId: effectiveCallUuid,
+          localExtension: _account?.extension ?? '',
+          remoteNumber: callerNumber,
+          remoteDisplayName: callerName,
+          direction: isIncoming
+              ? CallDirection.incoming
+              : CallDirection.outgoing,
+        );
+
+        if (isIncoming) {
           _log(
             'CALL_INITIATION',
             '>>> INCOMING INVITE received! Starting ringtone and navigating to incoming call screen.',
           );
-          final effectiveCallUuid = () {
-            try {
-              final dynamic rawCall = call;
-              final dynamic session = rawCall.session;
-              final dynamic req = session?.request;
-              final String? headerUuid =
-                  req?.getHeader('X-Call-UUID') as String?;
-              if (headerUuid != null && headerUuid.trim().isNotEmpty) {
-                return headerUuid.trim();
-              }
-            } catch (_) {}
-            return call.id ?? '';
-          }();
-
           _audioManager.prepareForCall(call.id);
 
           final isForeground =
               WidgetsBinding.instance.lifecycleState ==
               AppLifecycleState.resumed;
-          final callerNumber = call.remote_identity ?? '';
-          final callerName = 'Extension $callerNumber';
 
           final autoAnswered =
               _callCoordinator?.onIncomingCallReceived(
@@ -1281,6 +1309,10 @@ class SipManager extends ChangeNotifier
       case CallStateEnum.ACCEPTED:
         _log('TIMING', '>>> Call ACCEPTED (200 OK received/sent)');
         _logCallTiming(call.id, 'ACCEPTED');
+        final effectiveCallUuid = _resolveCallUuid(call);
+        _callHistoryService.recordCallAnswered(
+          correlationId: effectiveCallUuid,
+        );
         _audioManager.ensureDefaultAudioRoute(call.id);
         _audioManager.stopAll();
         _startCallTimer();
@@ -1291,7 +1323,11 @@ class SipManager extends ChangeNotifier
       case CallStateEnum.CONFIRMED:
         _log('TIMING', '>>> Call CONFIRMED (ACK received/dialog established)');
         _logCallTiming(call.id, 'CONFIRMED');
-        _callCoordinator?.onCallConfirmed(call.id ?? '');
+        final effectiveCallUuid = _resolveCallUuid(call);
+        _callHistoryService.recordCallAnswered(
+          correlationId: effectiveCallUuid,
+        );
+        _callCoordinator?.onCallConfirmed(effectiveCallUuid);
         _audioManager.ensureDefaultAudioRoute(call.id);
         _audioManager.stopAll(reason: 'call_confirmed');
         _startCallTimer();
@@ -1328,6 +1364,35 @@ class SipManager extends ChangeNotifier
           'CALL_TERMINATED',
           extra: 'state=${state.state}, cause=${state.cause}',
         );
+        final effectiveCallUuid = _resolveCallUuid(call);
+        final isIncoming = call.direction.toUpperCase() == 'INCOMING';
+        final isFailed = state.state == CallStateEnum.FAILED;
+        final causeStr = state.cause?.toString() ?? '';
+
+        final wasDeclined =
+            _callCoordinator?.declinedCallUuids.contains(effectiveCallUuid) ??
+            false;
+        final wasAnswered =
+            _callHistoryService
+                .getEntryByCorrelationId(effectiveCallUuid)
+                ?.answeredAt !=
+            null;
+
+        if (isFailed && !wasAnswered) {
+          _callHistoryService.recordCallFailed(
+            correlationId: effectiveCallUuid,
+            reason: causeStr,
+            isIncoming: isIncoming,
+          );
+        } else {
+          _callHistoryService.recordCallEnded(
+            correlationId: effectiveCallUuid,
+            wasAnswered: wasAnswered,
+            wasDeclinedByUser: wasDeclined,
+            cause: causeStr,
+          );
+        }
+
         _isDialing = false;
         _pendingTargetNumber = null;
         _stopCallTimer();
@@ -1337,7 +1402,7 @@ class SipManager extends ChangeNotifier
         _callState = null;
         _navigateBackToDialpad();
         _audioManager.resetOnCallEnded(call.id);
-        _callCoordinator?.onCallTerminated(call.id ?? '');
+        _callCoordinator?.onCallTerminated(effectiveCallUuid);
         break;
 
       default:
@@ -1564,6 +1629,7 @@ class SipManager extends ChangeNotifier
     _audioSessionSub?.cancel();
     _voipTokenSub?.cancel();
     _callCoordinator?.dispose();
+    _callHistoryService.dispose();
     super.dispose();
   }
 }

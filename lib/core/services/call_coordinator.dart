@@ -33,8 +33,11 @@ class CallCoordinator {
   String? _lastHandledActionKey;
   DateTime? _lastHandledActionTime;
 
+  static String normalizeUuid(String? uuid) =>
+      (uuid ?? '').trim().toLowerCase();
+
   bool _isDuplicateAction(String action, String callUuid) {
-    final key = '$action:$callUuid';
+    final key = '$action:${normalizeUuid(callUuid)}';
     final now = DateTime.now();
     if (_lastHandledActionKey == key &&
         _lastHandledActionTime != null &&
@@ -75,7 +78,7 @@ class CallCoordinator {
 
   void _handleCallAction(Map<String, String> event) {
     final action = event['action'] ?? '';
-    final callUuid = event['callUuid'] ?? '';
+    final callUuid = (event['callUuid'] ?? '').trim();
 
     if (action.isEmpty) return;
 
@@ -112,21 +115,23 @@ class CallCoordinator {
   }
 
   void _handleAnswerAction(String callUuid) {
-    if (callUuid.isEmpty) return;
-    if (delegate?.hasActiveCall == true && _activeCallUuid == callUuid) {
+    final trimmed = callUuid.trim();
+    if (trimmed.isEmpty) return;
+    if (delegate?.hasActiveCall == true &&
+        normalizeUuid(_activeCallUuid) == normalizeUuid(trimmed)) {
       debugPrint('[CallCoordinator] Answering active SIP call immediately.');
       delegate?.answerCall();
       _isNativeIncomingShown = false;
-      nativeCallBridge.dismissIncomingCall(callUuid);
+      nativeCallBridge.dismissIncomingCall(trimmed);
     } else {
       debugPrint(
-        '[CallCoordinator] SIP call not yet arrived. Storing pending answer for $callUuid.',
+        '[CallCoordinator] SIP call not yet arrived. Storing pending answer for $trimmed.',
       );
-      _pendingAnswerUuid = callUuid;
+      _pendingAnswerUuid = trimmed;
       _pendingAnswerTimeout?.cancel();
       _pendingAnswerTimeout = Timer(const Duration(seconds: 15), () {
-        debugPrint('[CallCoordinator] Pending answer for $callUuid expired.');
-        if (_pendingAnswerUuid == callUuid) {
+        debugPrint('[CallCoordinator] Pending answer for $trimmed expired.');
+        if (_pendingAnswerUuid == trimmed) {
           _pendingAnswerUuid = null;
         }
       });
@@ -135,32 +140,35 @@ class CallCoordinator {
   }
 
   void _handleDeclineAction(String callUuid) {
-    if (callUuid.isEmpty) return;
-    if (_pendingAnswerUuid == callUuid) {
+    final trimmed = callUuid.trim();
+    if (trimmed.isEmpty) return;
+    if (normalizeUuid(_pendingAnswerUuid) == normalizeUuid(trimmed)) {
       _pendingAnswerUuid = null;
       _pendingAnswerTimeout?.cancel();
     }
-    _declinedCallUuids.add(callUuid);
-    if (delegate?.hasActiveCall == true && _activeCallUuid == callUuid) {
+    _declinedCallUuids.add(trimmed);
+    if (delegate?.hasActiveCall == true &&
+        normalizeUuid(_activeCallUuid) == normalizeUuid(trimmed)) {
       delegate?.hangupCall();
     }
     _isNativeIncomingShown = false;
-    nativeCallBridge.dismissIncomingCall(callUuid);
+    nativeCallBridge.dismissIncomingCall(trimmed);
   }
 
   void onCancelPushReceived(String callUuid) {
-    if (callUuid.isEmpty) return;
-    if (_pendingAnswerUuid == callUuid) {
+    final trimmed = callUuid.trim();
+    if (trimmed.isEmpty) return;
+    if (normalizeUuid(_pendingAnswerUuid) == normalizeUuid(trimmed)) {
       _pendingAnswerUuid = null;
       _pendingAnswerTimeout?.cancel();
     }
-    if (_activeCallUuid == callUuid) {
+    if (normalizeUuid(_activeCallUuid) == normalizeUuid(trimmed)) {
       _activeCallUuid = null;
       if (delegate?.hasActiveCall == true) {
         delegate?.hangupCall();
       }
     }
-    nativeCallBridge.dismissIncomingCall(callUuid);
+    nativeCallBridge.dismissIncomingCall(trimmed);
     _isNativeIncomingShown = false;
   }
 
@@ -172,29 +180,36 @@ class CallCoordinator {
     required String callerNumber,
     required bool isAppForeground,
   }) {
-    _activeCallUuid = callUuid;
+    final trimmed = callUuid.trim();
+    _activeCallUuid = trimmed;
 
-    // Check if user already declined this specific call UUID prior to INVITE arrival
-    if (_declinedCallUuids.contains(callUuid)) {
+    // Check if user already declined this specific call UUID prior to INVITE arrival (case-insensitive)
+    final matchedDeclined = _declinedCallUuids
+        .where((u) => normalizeUuid(u) == normalizeUuid(trimmed))
+        .toList();
+    if (matchedDeclined.isNotEmpty) {
       debugPrint(
-        '[CallCoordinator] Call $callUuid was declined by user prior to INVITE arrival. Hanging up.',
+        '[CallCoordinator] Call $trimmed was declined by user prior to INVITE arrival. Hanging up.',
       );
-      _declinedCallUuids.remove(callUuid);
+      for (final u in matchedDeclined) {
+        _declinedCallUuids.remove(u);
+      }
       _isNativeIncomingShown = false;
-      nativeCallBridge.dismissIncomingCall(callUuid);
+      nativeCallBridge.dismissIncomingCall(trimmed);
       delegate?.hangupCall();
       return false;
     }
 
-    // Check if user already tapped answer for this EXACT call UUID
-    if (_pendingAnswerUuid != null && _pendingAnswerUuid == callUuid) {
+    // Check if user already tapped answer for this EXACT call UUID (case-insensitive)
+    if (_pendingAnswerUuid != null &&
+        normalizeUuid(_pendingAnswerUuid) == normalizeUuid(trimmed)) {
       debugPrint(
-        '[CallCoordinator] Auto-answering incoming call $callUuid because user previously answered matching UUID.',
+        '[CallCoordinator] Auto-answering incoming call $trimmed because user previously answered matching UUID.',
       );
       _pendingAnswerUuid = null;
       _pendingAnswerTimeout?.cancel();
       _isNativeIncomingShown = false;
-      nativeCallBridge.dismissIncomingCall(callUuid);
+      nativeCallBridge.dismissIncomingCall(trimmed);
       delegate?.answerCall();
       return true;
     }
@@ -205,7 +220,7 @@ class CallCoordinator {
         '[CallCoordinator] App in background: triggering native incoming notification.',
       );
       nativeCallBridge.showIncomingCall(
-        callUuid: callUuid,
+        callUuid: trimmed,
         callerName: callerName,
         callerNumber: callerNumber,
       );
@@ -216,26 +231,32 @@ class CallCoordinator {
   }
 
   void onCallConfirmed(String callUuid) {
-    if (_pendingAnswerUuid == callUuid ||
-        _pendingAnswerUuid == _activeCallUuid) {
+    final trimmed = callUuid.trim();
+    if (normalizeUuid(_pendingAnswerUuid) == normalizeUuid(trimmed) ||
+        normalizeUuid(_pendingAnswerUuid) == normalizeUuid(_activeCallUuid)) {
       _pendingAnswerUuid = null;
       _pendingAnswerTimeout?.cancel();
     }
     if (_isNativeIncomingShown) {
-      nativeCallBridge.dismissIncomingCall(_activeCallUuid ?? callUuid);
+      nativeCallBridge.dismissIncomingCall(_activeCallUuid ?? trimmed);
       _isNativeIncomingShown = false;
     }
   }
 
   void onCallTerminated(String callUuid) {
-    final targetUuid = _activeCallUuid ?? callUuid;
+    final trimmed = callUuid.trim();
+    final targetUuid = _activeCallUuid ?? trimmed;
     _activeCallUuid = null;
-    if (_pendingAnswerUuid == callUuid || _pendingAnswerUuid == targetUuid) {
+    if (normalizeUuid(_pendingAnswerUuid) == normalizeUuid(trimmed) ||
+        normalizeUuid(_pendingAnswerUuid) == normalizeUuid(targetUuid)) {
       _pendingAnswerUuid = null;
       _pendingAnswerTimeout?.cancel();
     }
-    _declinedCallUuids.remove(callUuid);
-    _declinedCallUuids.remove(targetUuid);
+    _declinedCallUuids.removeWhere(
+      (u) =>
+          normalizeUuid(u) == normalizeUuid(trimmed) ||
+          normalizeUuid(u) == normalizeUuid(targetUuid),
+    );
     nativeCallBridge.dismissIncomingCall(targetUuid);
     _isNativeIncomingShown = false;
   }

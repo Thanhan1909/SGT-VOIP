@@ -14,6 +14,7 @@ import AVFoundation
     private var voipRegistry: PKPushRegistry?
 
     private var activeCallUuids: [String: UUID] = [:]
+    private var uuidToOriginalCallUuid: [String: String] = [:]
     private var cachedVoipToken: String?
 
     override func application(
@@ -42,10 +43,11 @@ import AVFoundation
             switch call.method {
             case "showIncomingCall":
                 guard let args = call.arguments as? [String: Any],
-                      let callUuidStr = args["callUuid"] as? String else {
+                      let rawCallUuidStr = args["callUuid"] as? String else {
                     result(FlutterError(code: "INVALID_ARGS", message: "callUuid required", details: nil))
                     return
                 }
+                let callUuidStr = rawCallUuidStr.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                 let callerName = args["callerName"] as? String ?? ""
                 let callerNumber = args["callerNumber"] as? String ?? ""
                 self.reportIncomingCall(callUuidStr: callUuidStr, callerName: callerName, callerNumber: callerNumber) { success in
@@ -54,15 +56,30 @@ import AVFoundation
 
             case "dismissIncomingCall":
                 guard let args = call.arguments as? [String: Any],
-                      let callUuidStr = args["callUuid"] as? String else {
+                      let rawCallUuidStr = args["callUuid"] as? String else {
                     result(FlutterError(code: "INVALID_ARGS", message: "callUuid required", details: nil))
                     return
                 }
+                let callUuidStr = rawCallUuidStr.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                 self.endCall(callUuidStr: callUuidStr)
+                result(true)
+
+            case "getPendingCallAction":
+                result(nil)
+
+            case "ackCallAction":
                 result(true)
 
             case "getVoipToken":
                 result(self.cachedVoipToken)
+
+            case "requestNotificationPermission":
+                UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+                    result(granted)
+                }
+
+            case "canUseFullScreenIntent":
+                result(true)
 
             default:
                 result(FlutterMethodNotImplemented)
@@ -72,7 +89,7 @@ import AVFoundation
 
     // MARK: - CallKit Setup
     private func setupCallKit() {
-        let config = CXProviderConfiguration(localizedName: "SGT Softphone")
+        let config = CXProviderConfiguration()
         config.supportsVideo = false
         config.maximumCallsPerCallGroup = 1
         config.supportedHandleTypes = [.generic]
@@ -88,8 +105,10 @@ import AVFoundation
         callerNumber: String,
         completion: @escaping (Bool) -> Void
     ) {
-        let uuid = UUID(uuidString: callUuidStr) ?? UUID()
-        activeCallUuids[callUuidStr] = uuid
+        let normalized = callUuidStr.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let uuid = UUID(uuidString: normalized) ?? UUID()
+        activeCallUuids[normalized] = uuid
+        uuidToOriginalCallUuid[uuid.uuidString.lowercased()] = normalized
 
         let update = CXCallUpdate()
         let displayName = callerName.isEmpty ? "Extension \(callerNumber)" : "\(callerName) (\(callerNumber))"
@@ -113,28 +132,33 @@ import AVFoundation
     }
 
     private func endCall(callUuidStr: String) {
-        guard let uuid = activeCallUuids.removeValue(forKey: callUuidStr) else {
+        let normalized = callUuidStr.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard let uuid = activeCallUuids.removeValue(forKey: normalized) else {
             return
         }
+        uuidToOriginalCallUuid.removeValue(forKey: uuid.uuidString.lowercased())
         callKitProvider?.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
     }
 
     // MARK: - CXProviderDelegate
     func providerDidReset(_ provider: CXProvider) {
         activeCallUuids.removeAll()
+        uuidToOriginalCallUuid.removeAll()
     }
 
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
-        let uuidStr = action.callUUID.uuidString
-        NSLog("[CallKit] User answered call %@", uuidStr)
-        methodChannel?.invokeMethod("onCallAction", arguments: ["action": "answer", "callUuid": uuidStr])
+        let uuidKey = action.callUUID.uuidString.lowercased()
+        let resolvedUuid = uuidToOriginalCallUuid[uuidKey] ?? uuidKey
+        NSLog("[CallKit] User answered call %@", resolvedUuid)
+        methodChannel?.invokeMethod("onCallAction", arguments: ["action": "answer", "callUuid": resolvedUuid])
         action.fulfill()
     }
 
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
-        let uuidStr = action.callUUID.uuidString
-        NSLog("[CallKit] User ended/declined call %@", uuidStr)
-        methodChannel?.invokeMethod("onCallAction", arguments: ["action": "decline", "callUuid": uuidStr])
+        let uuidKey = action.callUUID.uuidString.lowercased()
+        let resolvedUuid = uuidToOriginalCallUuid[uuidKey] ?? uuidKey
+        NSLog("[CallKit] User ended/declined call %@", resolvedUuid)
+        methodChannel?.invokeMethod("onCallAction", arguments: ["action": "decline", "callUuid": resolvedUuid])
         action.fulfill()
     }
 
@@ -210,7 +234,9 @@ import AVFoundation
             }
         }
 
-        guard let callUuid = dict["call_uuid"] as? String, !callUuid.isEmpty else {
+        let rawCallUuid = dict["call_uuid"] as? String ?? ""
+        let callUuid = rawCallUuid.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !callUuid.isEmpty else {
             NSLog("[PushKit] Push payload missing call_uuid, ignoring")
             completion()
             return

@@ -45,6 +45,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // Verify Cuộc gọi default tab in AppShell
+    expect(find.text('Cuộc gọi'), findsWidgets);
+
+    // Switch to Bàn phím tab
+    await tester.tap(find.text('Bàn phím'));
+    await tester.pumpAndSettle();
+
     // Verify SGT Softphone App bar title is present
     expect(find.text('SGT Softphone'), findsOneWidget);
     // Verify dialpad numbers exist

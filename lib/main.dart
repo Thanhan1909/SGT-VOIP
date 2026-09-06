@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'core/constants/app_constants.dart';
 import 'core/services/sip_manager.dart';
+import 'presentation/screens/app_shell.dart';
 import 'presentation/screens/dialpad_screen.dart';
 import 'presentation/screens/in_call_screen.dart';
 import 'presentation/screens/incoming_call_screen.dart';
@@ -79,10 +80,11 @@ class SGTSoftphoneApp extends StatelessWidget {
       ),
       initialRoute: '/',
       routes: {
-        '/': (context) => const DialpadScreen(),
+        '/': (context) => const AppShell(),
         '/in_call': (context) => const InCallScreen(),
         '/incoming': (context) => const IncomingCallScreen(),
         '/settings': (context) => const SettingsScreen(),
+        '/dialpad': (context) => const DialpadScreen(),
       },
     );
   }
