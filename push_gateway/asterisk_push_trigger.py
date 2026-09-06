@@ -9,8 +9,25 @@ import argparse
 import urllib.request
 import urllib.error
 
+def _load_internal_secret() -> str:
+    secret = os.getenv("INTERNAL_API_SECRET", "")
+    if secret:
+        return secret
+    env_file = "/etc/sgt-push-gateway/gateway.env"
+    if os.path.isfile(env_file):
+        try:
+            with open(env_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("INTERNAL_API_SECRET="):
+                        return line.split("=", 1)[1].strip().strip('"\'')
+        except Exception:
+            pass
+    return ""
+
+
 GATEWAY_URL = os.getenv("SGT_PUSH_GATEWAY_URL", "http://127.0.0.1:8085")
-INTERNAL_API_SECRET = os.getenv("INTERNAL_API_SECRET", "sgt_internal_voip_secret_2026")
+INTERNAL_API_SECRET = _load_internal_secret()
 
 
 def sanitize_str(value: str, pattern: str = r"[^0-9a-zA-Z_.-]", max_len: int = 128) -> str:

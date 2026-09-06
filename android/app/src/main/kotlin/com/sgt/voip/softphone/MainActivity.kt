@@ -77,6 +77,7 @@ class MainActivity : FlutterActivity() {
                     val action = prefs.getString(CallActionReceiver.KEY_ACTION, null)
                     val uuid = prefs.getString(CallActionReceiver.KEY_UUID, null)
                     if (!action.isNullOrBlank() && !uuid.isNullOrBlank()) {
+                        prefs.edit().clear().apply()
                         result.success(mapOf("action" to action, "callUuid" to uuid))
                     } else {
                         result.success(null)
@@ -130,6 +131,9 @@ class MainActivity : FlutterActivity() {
         dispatchIntentAction(intent)
     }
 
+    private var lastDispatchedActionKey: String? = null
+    private var lastDispatchedTimeMs: Long = 0L
+
     private fun saveIntentAction(intent: Intent?) {
         val action = intent?.getStringExtra("call_action")
         val callUuid = intent?.getStringExtra(CallNotificationHelper.EXTRA_CALL_UUID)
@@ -144,6 +148,14 @@ class MainActivity : FlutterActivity() {
 
     fun dispatchCallAction(action: String, callUuid: String) {
         if (action.isNotBlank() && callUuid.isNotBlank()) {
+            val key = "$action:$callUuid"
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (key == lastDispatchedActionKey && (now - lastDispatchedTimeMs) < 3000L) {
+                Log.d("MainActivity", "Duplicate call action suppressed: $key")
+                return
+            }
+            lastDispatchedActionKey = key
+            lastDispatchedTimeMs = now
             methodChannel?.invokeMethod("onCallAction", mapOf("action" to action, "callUuid" to callUuid))
         }
     }
@@ -152,6 +164,8 @@ class MainActivity : FlutterActivity() {
         val action = intent?.getStringExtra("call_action")
         val callUuid = intent?.getStringExtra(CallNotificationHelper.EXTRA_CALL_UUID)
         if (!action.isNullOrBlank() && !callUuid.isNullOrBlank()) {
+            intent.removeExtra("call_action")
+            intent.removeExtra(CallNotificationHelper.EXTRA_CALL_UUID)
             dispatchCallAction(action, callUuid)
         }
     }

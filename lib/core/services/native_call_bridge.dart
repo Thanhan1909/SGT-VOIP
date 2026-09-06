@@ -25,6 +25,8 @@ abstract class NativeCallBridge {
 
   Stream<String> get voipTokenStream;
 
+  Stream<bool> get audioSessionStateStream;
+
   void dispose();
 }
 
@@ -37,6 +39,8 @@ class MethodChannelNativeCallBridge implements NativeCallBridge {
       StreamController<Map<String, String>>.broadcast();
   final StreamController<String> _voipTokenController =
       StreamController<String>.broadcast();
+  final StreamController<bool> _audioSessionStateController =
+      StreamController<bool>.broadcast();
 
   MethodChannelNativeCallBridge() {
     _channel.setMethodCallHandler(_handleMethodCall);
@@ -62,6 +66,12 @@ class MethodChannelNativeCallBridge implements NativeCallBridge {
 
       case 'onVoipTokenInvalidated':
         _voipTokenController.add('');
+        break;
+
+      case 'onAudioSessionState':
+        final args = Map<String, dynamic>.from(call.arguments as Map);
+        final active = args['active'] as bool? ?? false;
+        _audioSessionStateController.add(active);
         break;
 
       default:
@@ -180,8 +190,13 @@ class MethodChannelNativeCallBridge implements NativeCallBridge {
   Stream<String> get voipTokenStream => _voipTokenController.stream;
 
   @override
+  Stream<bool> get audioSessionStateStream =>
+      _audioSessionStateController.stream;
+
+  @override
   void dispose() {
     _callActionController.close();
     _voipTokenController.close();
+    _audioSessionStateController.close();
   }
 }

@@ -11,7 +11,7 @@ class PushTokenManager {
     String? gatewayBaseUrl,
     this.deviceAuthToken = const String.fromEnvironment(
       'SGT_DEVICE_AUTH_TOKEN',
-      defaultValue: 'sgt_device_auth_secret_2026',
+      defaultValue: '',
     ),
     this.clientFactory,
   }) : gatewayBaseUrl = _validateUrl(gatewayBaseUrl ?? defaultUrl());

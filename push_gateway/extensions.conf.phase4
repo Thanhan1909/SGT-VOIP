@@ -35,7 +35,12 @@ exten => s,1,NoOp(=== SUB-PUSH-DIAL: CALLER=${CALLERID(num)} TO=${ARG1} TIMEOUT=
  ; Proceed to dial target
  same => n(do_dial),NoOp(--- DIALING TARGET ${TARGET_EXT} VIA ${CONTACTS} ---)
  same => n,Set(CHANNEL(hangup_handler_push)=sub-push-cancel-on-hangup,s,1(${SAFE_UUID}))
- same => n,Dial(${CONTACTS},${CALL_TIMEOUT},tT)
+ same => n,Dial(${CONTACTS},${CALL_TIMEOUT},tTb(sub-push-add-header^s^1(${SAFE_UUID})))
+ same => n,Return()
+
+[sub-push-add-header]
+exten => s,1,NoOp(=== ATTACHING X-Call-UUID HEADER TO CALLEE: ${ARG1} ===)
+ same => n,Set(PJSIP_HEADER(add,X-Call-UUID)=${ARG1})
  same => n,Return()
 
 [sub-push-cancel-on-hangup]

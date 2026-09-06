@@ -36,9 +36,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger("sgt_push_gateway")
 
-# Secrets from environment or /etc/sgt-push-gateway/gateway.env
-INTERNAL_API_SECRET = os.getenv("INTERNAL_API_SECRET", "sgt_internal_voip_secret_2026")
-DEVICE_AUTH_SECRET = os.getenv("DEVICE_AUTH_SECRET", INTERNAL_API_SECRET)
+# Secrets from environment or /etc/sgt-push-gateway/gateway.env (no predictable fallback)
+INTERNAL_API_SECRET = os.getenv(
+    "INTERNAL_API_SECRET",
+    "test_internal_secret_for_unit_tests" if os.getenv("GATEWAY_TEST_MODE") == "1" else "",
+)
+DEVICE_AUTH_SECRET = os.getenv(
+    "DEVICE_AUTH_SECRET",
+    "test_device_secret_for_unit_tests" if os.getenv("GATEWAY_TEST_MODE") == "1" else "",
+)
 
 push_sender = PushSender()
 
@@ -89,6 +95,13 @@ async def verify_internal_auth(
     authorization: Optional[str] = Header(None),
 ):
     """Authenticate internal Asterisk and system calls."""
+    if not INTERNAL_API_SECRET:
+        logger.error("INTERNAL_API_SECRET is not configured on server!")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal authentication secret is not configured on server",
+        )
+
     token = x_internal_secret
     if not token and authorization and authorization.startswith("Bearer "):
         token = authorization[7:].strip()
@@ -114,22 +127,27 @@ async def verify_device_auth(
     authorization: Optional[str] = Header(None),
 ):
     """Authenticate mobile device registrations to prevent unauthorized spoofing."""
+    if not DEVICE_AUTH_SECRET:
+        logger.error("DEVICE_AUTH_SECRET is not configured on server!")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Device authentication secret is not configured on server",
+        )
+
     token = x_device_token
     if not token and authorization and authorization.startswith("Bearer "):
         token = authorization[7:].strip()
 
-    # If DEVICE_AUTH_SECRET is configured, enforce matching
-    if DEVICE_AUTH_SECRET:
-        if not token:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing device authentication token",
-            )
-        if token != DEVICE_AUTH_SECRET:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Invalid device authentication token",
-            )
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing device authentication token",
+        )
+    if token != DEVICE_AUTH_SECRET:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid device authentication token",
+        )
 
 
 # =========================================================================

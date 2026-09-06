@@ -1,14 +1,17 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart'
-    show kIsWeb, kDebugMode, visibleForTesting;
+    show kIsWeb, kDebugMode, kReleaseMode, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sip_ua/sip_ua.dart';
 import '../constants/app_constants.dart';
 import '../../data/models/sip_account.dart';
 import 'audio_manager.dart';
 import 'call_coordinator.dart';
 import 'native_call_bridge.dart';
+import 'push_token_manager.dart';
 
 void _log(String tag, String msg) {
   final now = DateTime.now();
@@ -117,6 +120,64 @@ class SipManager extends ChangeNotifier
   void setCallCoordinatorForTesting(CallCoordinator? coordinator) {
     _callCoordinator = coordinator;
     _callCoordinator?.delegate = this;
+  }
+
+  PushTokenManager _pushTokenManager = PushTokenManager();
+  StreamSubscription<bool>? _audioSessionSub;
+  StreamSubscription<String>? _voipTokenSub;
+  String? _lastPushToken;
+  String? _cachedDeviceId;
+
+  @visibleForTesting
+  void setPushTokenManagerForTesting(PushTokenManager manager) {
+    _pushTokenManager = manager;
+  }
+
+  Future<String> _getOrCreateDeviceId() async {
+    if (_cachedDeviceId != null) return _cachedDeviceId!;
+    final prefs = await SharedPreferences.getInstance();
+    var id = prefs.getString('sgt_voip_device_id');
+    if (id == null || id.isEmpty) {
+      id =
+          'dev_${DateTime.now().millisecondsSinceEpoch}_${(1000 + (DateTime.now().microsecond % 9000))}';
+      await prefs.setString('sgt_voip_device_id', id);
+    }
+    _cachedDeviceId = id;
+    return id;
+  }
+
+  Future<void> _registerPushTokenWithGateway([String? token]) async {
+    if (kIsWeb) return;
+    final pushToken = token ?? _lastPushToken;
+    if (pushToken == null || pushToken.isEmpty || _account == null) {
+      return;
+    }
+    try {
+      final deviceId = await _getOrCreateDeviceId();
+      final platform = Platform.isIOS ? 'ios' : 'android';
+      await _pushTokenManager.registerToken(
+        extension: _account!.extension,
+        platform: platform,
+        deviceId: deviceId,
+        pushToken: pushToken,
+        pushEnvironment: kReleaseMode ? 'production' : 'development',
+      );
+    } catch (e) {
+      _log('SipManager', 'Failed to register push token with gateway: $e');
+    }
+  }
+
+  Future<void> _revokePushTokenWithGateway() async {
+    if (kIsWeb || _account == null) return;
+    try {
+      final deviceId = await _getOrCreateDeviceId();
+      await _pushTokenManager.revokeToken(
+        extension: _account!.extension,
+        deviceId: deviceId,
+      );
+    } catch (e) {
+      _log('SipManager', 'Failed to revoke push token with gateway: $e');
+    }
   }
 
   @override
@@ -284,6 +345,54 @@ class SipManager extends ChangeNotifier
     WidgetsBinding.instance.addObserver(this);
     _helper.addSipUaHelperListener(this);
     await _audioManager.init();
+
+    final coordinator = callCoordinator;
+    _audioSessionSub?.cancel();
+    _audioSessionSub = coordinator.nativeCallBridge.audioSessionStateStream
+        .listen(_audioManager.onNativeAudioSessionChanged);
+
+    _voipTokenSub?.cancel();
+    _voipTokenSub = coordinator.nativeCallBridge.voipTokenStream.listen((
+      token,
+    ) {
+      if (token.isNotEmpty) {
+        _lastPushToken = token;
+        if (_account != null &&
+            _connectionStatus == SipConnectionStatus.online) {
+          _registerPushTokenWithGateway(token);
+        }
+      }
+    });
+
+    if (!kIsWeb) {
+      coordinator.nativeCallBridge
+          .requestNotificationPermission()
+          .then((granted) {
+            _log('SipManager', 'Notification permission granted: $granted');
+          })
+          .catchError((e) {
+            _log('SipManager', 'Notification permission error: $e');
+          });
+
+      coordinator.nativeCallBridge
+          .canUseFullScreenIntent()
+          .then((canFullScreen) {
+            _log('SipManager', 'Can use full-screen intent: $canFullScreen');
+          })
+          .catchError((e) {
+            _log('SipManager', 'CanUseFullScreenIntent check error: $e');
+          });
+
+      coordinator.nativeCallBridge
+          .getVoipToken()
+          .then((token) {
+            if (token != null && token.isNotEmpty) {
+              _lastPushToken = token;
+            }
+          })
+          .catchError((_) {});
+    }
+
     _account = await SipAccount.loadFromPrefs();
     _forceRelayOnly = _account!.forceRelayOnly;
     _diagnosticLogging = _account!.diagnosticLogging;
@@ -442,6 +551,7 @@ class SipManager extends ChangeNotifier
     _reconnectTimer = null;
     try {
       _isReconfiguring = true;
+      _revokePushTokenWithGateway();
       _helper.unregister(true);
       _helper.stop();
       _isReconfiguring = false;
@@ -991,6 +1101,7 @@ class SipManager extends ChangeNotifier
         _statusMessage = 'Đã đăng ký (${_account?.extension})';
         _reconnectTimer?.cancel();
         _reconnectTimer = null;
+        _registerPushTokenWithGateway(_lastPushToken);
         break;
       case RegistrationStateEnum.UNREGISTERED:
         _connectionStatus = SipConnectionStatus.offline;
@@ -1087,6 +1198,20 @@ class SipManager extends ChangeNotifier
             'CALL_INITIATION',
             '>>> INCOMING INVITE received! Starting ringtone and navigating to incoming call screen.',
           );
+          final effectiveCallUuid = () {
+            try {
+              final dynamic rawCall = call;
+              final dynamic session = rawCall.session;
+              final dynamic req = session?.request;
+              final String? headerUuid =
+                  req?.getHeader('X-Call-UUID') as String?;
+              if (headerUuid != null && headerUuid.trim().isNotEmpty) {
+                return headerUuid.trim();
+              }
+            } catch (_) {}
+            return call.id ?? '';
+          }();
+
           _audioManager.prepareForCall(call.id);
 
           final isForeground =
@@ -1097,7 +1222,7 @@ class SipManager extends ChangeNotifier
 
           final autoAnswered =
               _callCoordinator?.onIncomingCallReceived(
-                callUuid: call.id ?? '',
+                callUuid: effectiveCallUuid,
                 callerName: callerName,
                 callerNumber: callerNumber,
                 isAppForeground: isForeground,
@@ -1431,5 +1556,14 @@ class SipManager extends ChangeNotifier
   @visibleForTesting
   void setNavigationGenerationForTesting(int gen) {
     _navigationGeneration = gen;
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _audioSessionSub?.cancel();
+    _voipTokenSub?.cancel();
+    _callCoordinator?.dispose();
+    super.dispose();
   }
 }

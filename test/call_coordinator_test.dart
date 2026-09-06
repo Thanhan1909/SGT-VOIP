@@ -8,6 +8,8 @@ class MockNativeCallBridge implements NativeCallBridge {
       StreamController<Map<String, String>>.broadcast();
   final StreamController<String> _tokenController =
       StreamController<String>.broadcast();
+  final StreamController<bool> _audioSessionController =
+      StreamController<bool>.broadcast();
 
   final List<String> shownCalls = [];
   final List<String> dismissedCalls = [];
@@ -20,6 +22,10 @@ class MockNativeCallBridge implements NativeCallBridge {
 
   void emitVoipToken(String token) {
     _tokenController.add(token);
+  }
+
+  void emitAudioSessionState(bool active) {
+    _audioSessionController.add(active);
   }
 
   @override
@@ -64,9 +70,13 @@ class MockNativeCallBridge implements NativeCallBridge {
   Stream<String> get voipTokenStream => _tokenController.stream;
 
   @override
+  Stream<bool> get audioSessionStateStream => _audioSessionController.stream;
+
+  @override
   void dispose() {
     _actionController.close();
     _tokenController.close();
+    _audioSessionController.close();
   }
 }
 
@@ -353,6 +363,44 @@ void main() {
 
         freshCoord.dispose();
         freshBridge.dispose();
+      },
+    );
+
+    test('13. Duplicate call action within 3 seconds is suppressed', () async {
+      mockDelegate.activeCall = true;
+      coordinator.onIncomingCallReceived(
+        callUuid: 'call-dedup-101',
+        callerName: '201',
+        callerNumber: '201',
+        isAppForeground: false,
+      );
+
+      // Emit first answer action
+      mockBridge.emitAction('answer', 'call-dedup-101');
+      await pumpEventQueue();
+      expect(mockDelegate.answerCallsCount, equals(1));
+
+      // Immediately emit identical answer action (e.g. from both receiver and intent)
+      mockBridge.emitAction('answer', 'call-dedup-101');
+      await pumpEventQueue();
+
+      // Count should still be 1 because second action was deduplicated
+      expect(mockDelegate.answerCallsCount, equals(1));
+    });
+
+    test(
+      '14. AudioSessionStateStream emits activation and deactivation events',
+      () async {
+        final states = <bool>[];
+        final sub = mockBridge.audioSessionStateStream.listen(states.add);
+
+        mockBridge.emitAudioSessionState(true);
+        await pumpEventQueue();
+        mockBridge.emitAudioSessionState(false);
+        await pumpEventQueue();
+
+        expect(states, equals([true, false]));
+        await sub.cancel();
       },
     );
   });

@@ -30,6 +30,25 @@ class CallCoordinator {
   bool get isNativeIncomingShown => _isNativeIncomingShown;
   Set<String> get declinedCallUuids => Set.unmodifiable(_declinedCallUuids);
 
+  String? _lastHandledActionKey;
+  DateTime? _lastHandledActionTime;
+
+  bool _isDuplicateAction(String action, String callUuid) {
+    final key = '$action:$callUuid';
+    final now = DateTime.now();
+    if (_lastHandledActionKey == key &&
+        _lastHandledActionTime != null &&
+        now.difference(_lastHandledActionTime!) < const Duration(seconds: 3)) {
+      debugPrint(
+        '[CallCoordinator] Duplicate action suppressed: $action for $callUuid',
+      );
+      return true;
+    }
+    _lastHandledActionKey = key;
+    _lastHandledActionTime = now;
+    return false;
+  }
+
   void _initBridgeListener() {
     _callActionSub = nativeCallBridge.callActionStream.listen(
       _handleCallAction,
@@ -43,8 +62,9 @@ class CallCoordinator {
         debugPrint(
           '[CallCoordinator] Consuming pending cold-start action: $pending',
         );
-        _handleCallAction(pending);
+        // ACK immediately to prevent race conditions with subsequent reads
         await nativeCallBridge.ackCallAction();
+        _handleCallAction(pending);
       }
     } catch (e) {
       debugPrint(
@@ -56,6 +76,18 @@ class CallCoordinator {
   void _handleCallAction(Map<String, String> event) {
     final action = event['action'] ?? '';
     final callUuid = event['callUuid'] ?? '';
+
+    if (action.isEmpty) return;
+
+    if (action == 'incoming_push') {
+      delegate?.ensureConnected();
+      return;
+    }
+
+    if (callUuid.isNotEmpty && _isDuplicateAction(action, callUuid)) {
+      return;
+    }
+
     debugPrint(
       '[CallCoordinator] Received native action: $action, callUuid: $callUuid',
     );
@@ -71,10 +103,6 @@ class CallCoordinator {
 
       case 'cancel':
         onCancelPushReceived(callUuid);
-        break;
-
-      case 'incoming_push':
-        delegate?.ensureConnected();
         break;
 
       default:
@@ -188,26 +216,27 @@ class CallCoordinator {
   }
 
   void onCallConfirmed(String callUuid) {
-    if (_pendingAnswerUuid == callUuid) {
+    if (_pendingAnswerUuid == callUuid ||
+        _pendingAnswerUuid == _activeCallUuid) {
       _pendingAnswerUuid = null;
       _pendingAnswerTimeout?.cancel();
     }
     if (_isNativeIncomingShown) {
-      nativeCallBridge.dismissIncomingCall(callUuid);
+      nativeCallBridge.dismissIncomingCall(_activeCallUuid ?? callUuid);
       _isNativeIncomingShown = false;
     }
   }
 
   void onCallTerminated(String callUuid) {
-    if (_activeCallUuid == callUuid) {
-      _activeCallUuid = null;
-    }
-    if (_pendingAnswerUuid == callUuid) {
+    final targetUuid = _activeCallUuid ?? callUuid;
+    _activeCallUuid = null;
+    if (_pendingAnswerUuid == callUuid || _pendingAnswerUuid == targetUuid) {
       _pendingAnswerUuid = null;
       _pendingAnswerTimeout?.cancel();
     }
     _declinedCallUuids.remove(callUuid);
-    nativeCallBridge.dismissIncomingCall(callUuid);
+    _declinedCallUuids.remove(targetUuid);
+    nativeCallBridge.dismissIncomingCall(targetUuid);
     _isNativeIncomingShown = false;
   }
 

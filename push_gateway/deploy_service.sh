@@ -12,11 +12,13 @@ echo "=== SGT Push Gateway Idempotent Deploy Script ==="
 # 1. Ensure configuration directory and environment file exist
 mkdir -p "${CONFIG_DIR}"
 if [[ ! -f "${ENV_FILE}" ]]; then
-    echo "Creating default environment file at ${ENV_FILE}..."
-    cat << 'EOF' > "${ENV_FILE}"
+    echo "Creating secure random environment file at ${ENV_FILE}..."
+    GEN_INTERNAL=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p)
+    GEN_DEVICE=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p)
+    cat << EOF > "${ENV_FILE}"
 # SGT VoIP Push Gateway Configuration
-INTERNAL_API_SECRET=sgt_internal_voip_secret_2026
-DEVICE_AUTH_SECRET=sgt_internal_voip_secret_2026
+INTERNAL_API_SECRET=${GEN_INTERNAL}
+DEVICE_AUTH_SECRET=${GEN_DEVICE}
 APNS_BUNDLE_ID=com.sgt.voip.flutterSipSoftphone
 GATEWAY_DB_PATH=/var/lib/sgt-push-gateway/gateway.db
 EOF

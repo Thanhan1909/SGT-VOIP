@@ -68,18 +68,32 @@ jobs:
             *) echo "SGT_WSS_URI must match wss://host/ws"; exit 1 ;;
           esac
 
+      - name: Materialize Firebase configuration from secret (optional)
+        env:
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            echo "[CI] Materializing google-services.json from GitHub secret..."
+            echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > android/app/google-services.json
+          else
+            echo "[CI] GOOGLE_SERVICES_JSON_BASE64 secret not provided; building without local google-services.json."
+          fi
+
       - name: Build Android APK (debug-signed, internal testing only)
         env:
           SGT_WSS_URI: ${{ vars.SGT_WSS_URI }}
           SGT_SIP_DOMAIN: ${{ vars.SGT_SIP_DOMAIN }}
           SGT_TURN_URIS: ${{ vars.SGT_TURN_URIS }}
           SGT_TURN_USERNAME: ${{ vars.SGT_TURN_USERNAME }}
+          SGT_PUSH_GATEWAY_URL: ${{ vars.SGT_PUSH_GATEWAY_URL }}
         run: |
+          GATEWAY_URL="${SGT_PUSH_GATEWAY_URL:-https://sgtvoip.duckdns.org/push}"
           flutter build apk --debug \
             --dart-define=SGT_WSS_URI="$SGT_WSS_URI" \
             --dart-define=SGT_SIP_DOMAIN="$SGT_SIP_DOMAIN" \
             --dart-define=SGT_TURN_URIS="$SGT_TURN_URIS" \
-            --dart-define=SGT_TURN_USERNAME="$SGT_TURN_USERNAME"
+            --dart-define=SGT_TURN_USERNAME="$SGT_TURN_USERNAME" \
+            --dart-define=SGT_PUSH_GATEWAY_URL="$GATEWAY_URL"
 
       - name: Verify APK output file
         run: test -f build/app/outputs/flutter-apk/app-debug.apk
@@ -143,12 +157,15 @@ jobs:
           SGT_SIP_DOMAIN: ${{ vars.SGT_SIP_DOMAIN }}
           SGT_TURN_URIS: ${{ vars.SGT_TURN_URIS }}
           SGT_TURN_USERNAME: ${{ vars.SGT_TURN_USERNAME }}
+          SGT_PUSH_GATEWAY_URL: ${{ vars.SGT_PUSH_GATEWAY_URL }}
         run: |
+          GATEWAY_URL="${SGT_PUSH_GATEWAY_URL:-https://sgtvoip.duckdns.org/push}"
           flutter build ios --release --no-codesign \
             --dart-define=SGT_WSS_URI="$SGT_WSS_URI" \
             --dart-define=SGT_SIP_DOMAIN="$SGT_SIP_DOMAIN" \
             --dart-define=SGT_TURN_URIS="$SGT_TURN_URIS" \
-            --dart-define=SGT_TURN_USERNAME="$SGT_TURN_USERNAME"
+            --dart-define=SGT_TURN_USERNAME="$SGT_TURN_USERNAME" \
+            --dart-define=SGT_PUSH_GATEWAY_URL="$GATEWAY_URL"
 
       - name: Stage Payload directory structure
         run: |

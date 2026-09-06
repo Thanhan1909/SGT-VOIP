@@ -234,5 +234,29 @@ void main() {
       expect(url, isNotEmpty);
       expect(url.startsWith('http://') || url.startsWith('https://'), isTrue);
     });
+
+    test('6. registerToken omits X-Device-Auth-Token when empty', () async {
+      Map<String, String>? capturedHeaders;
+      final fakeClient = FakeHttpClient(
+        statusCode: 200,
+        responseBody: '{"success": true}',
+        onRequest: (url, headers, body) {
+          capturedHeaders = headers;
+        },
+      );
+      final manager = PushTokenManager(
+        gatewayBaseUrl: 'http://127.0.0.1:8085',
+        deviceAuthToken: '',
+        clientFactory: () => fakeClient,
+      );
+      final success = await manager.registerToken(
+        extension: '201',
+        platform: 'android',
+        deviceId: 'device-test-02',
+        pushToken: 'fcm_test_token',
+      );
+      expect(success, isTrue);
+      expect(capturedHeaders?['x-device-auth-token'], isNull);
+    });
   });
 }

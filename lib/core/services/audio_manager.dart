@@ -43,6 +43,22 @@ class AudioManager {
   bool _audioRouteInitializedForCall = false;
   bool _isMediaReady = false;
   bool get isMediaReady => _isMediaReady;
+  bool _isNativeAudioSessionActive = false;
+  bool get isNativeAudioSessionActive => _isNativeAudioSessionActive;
+
+  /// Handles native audio session activation/deactivation events (e.g. from iOS CallKit).
+  void onNativeAudioSessionChanged(bool active) {
+    _isNativeAudioSessionActive = active;
+    debugPrint(
+      '[AudioManager] onNativeAudioSessionChanged: active=$active, activeCallId=$_activeCallId',
+    );
+    if (active) {
+      _isMediaReady = true;
+      if (_activeCallId != null && !_audioRouteInitializedForCall) {
+        ensureDefaultAudioRoute(_activeCallId);
+      }
+    }
+  }
 
   /// Resets audio state when preparing for a new call (incoming or outgoing).
   ///
